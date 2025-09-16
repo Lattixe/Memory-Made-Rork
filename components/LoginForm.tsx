@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -16,30 +16,65 @@ import { memoryMadeColors } from '@/constants/colors';
 
 interface LoginFormProps {
   onLogin: (email: string, password: string) => Promise<void>;
-  onSignup?: (email: string, password: string) => Promise<void>;
+  onSignup?: (email: string, password: string, name?: string) => Promise<void>;
 }
 
 export default function LoginForm({ onLogin, onSignup }: LoginFormProps) {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [name, setName] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
+
+  const canSubmit = useMemo(() => {
+    if (mode === 'signup') return email.includes('@') && password.length >= 6;
+    return email.includes('@') && password.length > 0;
+  }, [email, password, mode]);
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
+    const e = email.trim();
+    const p = password.trim();
+    if (!e || !p) {
       Alert.alert('Required Fields', 'Please enter both your email and password.');
       return;
     }
-
-    if (!email.includes('@')) {
+    if (!e.includes('@')) {
       Alert.alert('Invalid Email', 'Please enter a valid email address.');
       return;
     }
 
     setIsLoading(true);
     try {
-      await onLogin(email.trim(), password.trim());
+      await onLogin(e, p);
     } catch (error) {
       Alert.alert('Login Error', 'Failed to log in. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSignup = async () => {
+    if (!onSignup) return;
+    const e = email.trim();
+    const p = password.trim();
+    const n = name.trim() || undefined;
+    if (!e || !p) {
+      Alert.alert('Required Fields', 'Enter email and password to sign up.');
+      return;
+    }
+    if (!e.includes('@')) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address.');
+      return;
+    }
+    if (p.length < 6) {
+      Alert.alert('Weak Password', 'Password must be at least 6 characters.');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await onSignup(e, p, n);
+    } catch (e) {
+      Alert.alert('Signup Error', 'Failed to sign up.');
     } finally {
       setIsLoading(false);
     }
@@ -65,8 +100,46 @@ export default function LoginForm({ onLogin, onSignup }: LoginFormProps) {
           />
         </View>
 
+        <View style={styles.toggleRow}>
+          <TouchableOpacity
+            testID="auth-toggle-login"
+            onPress={() => setMode('login')}
+            style={[styles.toggleButton, mode === 'login' && styles.toggleButtonActive]}
+            disabled={isLoading}
+          >
+            <Text style={[styles.toggleText, mode === 'login' && styles.toggleTextActive]}>Log In</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            testID="auth-toggle-signup"
+            onPress={() => setMode('signup')}
+            style={[styles.toggleButton, mode === 'signup' && styles.toggleButtonActive]}
+            disabled={isLoading}
+          >
+            <Text style={[styles.toggleText, mode === 'signup' && styles.toggleTextActive]}>Sign Up</Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.form}>
+          {mode === 'signup' && (
+            <TextInput
+              testID="name-input"
+              style={styles.input}
+              placeholder="Name (optional)"
+              placeholderTextColor={memoryMadeColors.text.tertiary}
+              value={name}
+              onChangeText={setName}
+              autoCapitalize="words"
+              editable={!isLoading}
+              returnKeyType="next"
+              selectionColor={memoryMadeColors.primary}
+              underlineColorAndroid="transparent"
+              autoCorrect={false}
+              spellCheck={false}
+            />
+          )}
+
           <TextInput
+            testID="email-input"
             style={styles.input}
             placeholder="Email"
             placeholderTextColor={memoryMadeColors.text.tertiary}
@@ -77,7 +150,6 @@ export default function LoginForm({ onLogin, onSignup }: LoginFormProps) {
             autoComplete="email"
             editable={!isLoading}
             returnKeyType="next"
-            onSubmitEditing={() => {}}
             selectionColor={memoryMadeColors.primary}
             underlineColorAndroid="transparent"
             autoCorrect={false}
@@ -85,6 +157,7 @@ export default function LoginForm({ onLogin, onSignup }: LoginFormProps) {
           />
 
           <TextInput
+            testID="password-input"
             style={styles.input}
             placeholder="Password"
             placeholderTextColor={memoryMadeColors.text.tertiary}
@@ -92,52 +165,55 @@ export default function LoginForm({ onLogin, onSignup }: LoginFormProps) {
             onChangeText={setPassword}
             secureTextEntry={true}
             autoCapitalize="none"
-            autoComplete="password"
+            autoComplete={mode === 'signup' ? 'new-password' : 'password'}
             editable={!isLoading}
-            returnKeyType="done"
-            onSubmitEditing={handleLogin}
+            returnKeyType={mode === 'signup' ? 'next' : 'done'}
+            onSubmitEditing={mode === 'signup' ? undefined : handleLogin}
             selectionColor={memoryMadeColors.primary}
             underlineColorAndroid="transparent"
             autoCorrect={false}
             spellCheck={false}
           />
 
-          <TouchableOpacity
-            style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
-            onPress={handleLogin}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <>
-                <ActivityIndicator size="small" color={memoryMadeColors.white} />
-                <Text style={styles.loginButtonText}>Logging In...</Text>
-              </>
-            ) : (
-              <Text style={styles.loginButtonText}>Log In</Text>
-            )}
-          </TouchableOpacity>
+          {mode === 'login' ? (
+            <TouchableOpacity
+              testID="login-button"
+              style={[styles.primaryButton, (!canSubmit || isLoading) && styles.primaryButtonDisabled]}
+              onPress={handleLogin}
+              disabled={!canSubmit || isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <ActivityIndicator size="small" color={memoryMadeColors.white} />
+                  <Text style={styles.primaryButtonText}>Logging In...</Text>
+                </>
+              ) : (
+                <Text style={styles.primaryButtonText}>Log In</Text>
+              )}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              testID="signup-button"
+              style={[styles.outlineButton, (!canSubmit || isLoading) && styles.outlineButtonDisabled]}
+              onPress={handleSignup}
+              disabled={!canSubmit || isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <ActivityIndicator size="small" color={memoryMadeColors.primary} />
+                  <Text style={styles.outlineButtonText}>Creating Account...</Text>
+                </>
+              ) : (
+                <Text style={styles.outlineButtonText}>Create Account</Text>
+              )}
+            </TouchableOpacity>
+          )}
 
-          <TouchableOpacity style={styles.forgotPassword}>
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.signUpButton} onPress={async () => {
-            if (!onSignup) return;
-            if (!email.trim() || !password.trim()) {
-              Alert.alert('Required Fields', 'Enter email and password to sign up.');
-              return;
-            }
-            setIsLoading(true);
-            try {
-              await onSignup(email.trim(), password.trim());
-            } catch (e) {
-              Alert.alert('Signup Error', 'Failed to sign up.');
-            } finally {
-              setIsLoading(false);
-            }
-          }}>
-            <Text style={styles.signUpButtonText}>Sign Up</Text>
-          </TouchableOpacity>
+          {mode === 'login' && (
+            <TouchableOpacity style={styles.forgotPassword}>
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          )}
 
           <View style={styles.orContainer}>
             <Text style={styles.orText}>or continue with</Text>
@@ -173,12 +249,38 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 12,
   },
   logo: {
     width: 600,
-    height: 200,
+    height: 160,
     maxWidth: '100%',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  toggleButton: {
+    flex: 1,
+    backgroundColor: memoryMadeColors.white,
+    borderWidth: 1,
+    borderColor: memoryMadeColors.border,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  toggleButtonActive: {
+    borderColor: memoryMadeColors.primary,
+  },
+  toggleText: {
+    color: memoryMadeColors.text.secondary,
+    fontSize: 16,
+    fontWeight: '600' as const,
+  },
+  toggleTextActive: {
+    color: memoryMadeColors.primary,
   },
   form: {
     marginBottom: 20,
@@ -198,7 +300,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
     includeFontPadding: false,
   },
-  loginButton: {
+  primaryButton: {
     backgroundColor: memoryMadeColors.primary,
     paddingVertical: 18,
     paddingHorizontal: 32,
@@ -212,11 +314,30 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  loginButtonDisabled: {
+  primaryButtonDisabled: {
     opacity: 0.6,
   },
-  loginButtonText: {
+  primaryButtonText: {
     color: memoryMadeColors.white,
+    fontSize: 18,
+    fontWeight: '600' as const,
+  },
+  outlineButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: memoryMadeColors.primary,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  outlineButtonDisabled: {
+    opacity: 0.6,
+  },
+  outlineButtonText: {
+    color: memoryMadeColors.primary,
     fontSize: 18,
     fontWeight: '600' as const,
   },
@@ -227,22 +348,6 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     color: memoryMadeColors.text.secondary,
     fontSize: 14,
-  },
-  signUpButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: memoryMadeColors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 16,
-  },
-  signUpButtonText: {
-    color: memoryMadeColors.primary,
-    fontSize: 18,
-    fontWeight: '600' as const,
   },
   orContainer: {
     alignItems: 'center',

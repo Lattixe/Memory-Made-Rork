@@ -38,7 +38,7 @@ type ImageEditResponse = {
 
 
 export default function UploadScreen() {
-  const { user, savedStickers, isLoading, login, logout, deleteSticker } = useUser();
+  const { user, savedStickers, isLoading, login, signup, logout, deleteSticker } = useUser();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [showGallery, setShowGallery] = useState<boolean>(false);
