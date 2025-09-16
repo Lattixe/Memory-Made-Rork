@@ -1,0 +1,1347 @@
+import React, { useState, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  TextInput,
+  Alert,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Keyboard,
+  TouchableWithoutFeedback,
+  Dimensions,
+  FlatList,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ArrowLeft, Save, Sparkles, RotateCcw, ChevronLeft, ChevronRight, Palette, Droplets, Clock, Heart, Flower2, Shapes, Camera, PenTool, Leaf } from 'lucide-react-native';
+import { neutralColors } from '@/constants/colors';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useUser } from '@/contexts/UserContext';
+import { safeJsonParse } from '@/utils/json';
+import { compressBase64Image, needsCompression, estimateBase64Size } from '@/utils/imageCompression';
+import { processStickerImage } from '@/utils/backgroundRemover';
+
+type ImageEditRequest = {
+  prompt: string;
+  images: { type: 'image'; image: string }[];
+};
+
+type ImageEditResponse = {
+  image: { base64Data: string; mimeType: string };
+};
+
+type StickerVersion = {
+  id: string;
+  image: string;
+  label: string;
+  isOriginal?: boolean;
+};
+
+type StylePreset = {
+  id: string;
+  name: string;
+  icon: React.ComponentType<{ size: number; color: string }>;
+  prompt: string;
+  color: string;
+};
+
+const { width: screenWidth } = Dimensions.get('window');
+
+const STYLE_PRESETS: StylePreset[] = [
+  {
+    id: 'watercolor',
+    name: 'Watercolor',
+    icon: Droplets,
+    prompt: 'Transform into soft watercolor style with blended pastel colors, gentle brush strokes, and artistic paint effects. Add subtle color bleeding and organic edges typical of watercolor paintings.',
+    color: '#87CEEB',
+  },
+  {
+    id: 'minimalist',
+    name: 'Minimalist',
+    icon: Shapes,
+    prompt: 'Simplify to clean minimalist design with simple lines, reduced details, subtle monochrome or limited color palette, and plenty of negative space. Focus on essential elements only.',
+    color: '#2C3E50',
+  },
+  {
+    id: 'vintage',
+    name: 'Vintage',
+    icon: Clock,
+    prompt: 'Apply vintage/retro aesthetic with muted sepia tones, aged texture overlay, nostalgic elements, and classic typography. Add subtle grain and faded edges for authentic vintage feel.',
+    color: '#8B7355',
+  },
+  {
+    id: 'kawaii',
+    name: 'Kawaii',
+    icon: Heart,
+    prompt: 'Make super cute kawaii/chibi style with big sparkly eyes, soft pastel colors (pink, lavender, mint), rounded features, and adorable expressions. Add cute blush marks and sparkles.',
+    color: '#FFB6C1',
+  },
+  {
+    id: 'boho',
+    name: 'Boho',
+    icon: Leaf,
+    prompt: 'Transform to bohemian style with earthy warm tones (terracotta, sage, mustard), natural textures, organic patterns, and free-spirited artistic elements. Add subtle mandala or feather details.',
+    color: '#CD853F',
+  },
+  {
+    id: 'floral',
+    name: 'Floral',
+    icon: Flower2,
+    prompt: 'Add beautiful floral elements with detailed flower illustrations, botanical leaves, vines, and nature-inspired decorations. Use soft romantic colors and delicate petals.',
+    color: '#FF69B4',
+  },
+  {
+    id: 'geometric',
+    name: 'Geometric',
+    icon: Shapes,
+    prompt: 'Apply modern geometric style with bold shapes, clean lines, abstract patterns, and contemporary color blocking. Use triangles, circles, and angular designs with precise edges.',
+    color: '#4A90E2',
+  },
+  {
+    id: 'aesthetic',
+    name: 'Aesthetic',
+    icon: Camera,
+    prompt: 'Create trendy aesthetic/Instagram style with dreamy pastel gradient colors, soft glow effects, and cohesive millennial pink/lavender/mint palette. Add subtle sparkles and dreamy atmosphere.',
+    color: '#E6B8D8',
+  },
+  {
+    id: 'sketch',
+    name: 'Hand-drawn',
+    icon: PenTool,
+    prompt: 'Convert to hand-drawn sketch style with visible pencil strokes, crosshatching, doodle-like quality, and artistic imperfections. Keep it charming and personal with sketch lines.',
+    color: '#696969',
+  },
+  {
+    id: 'botanical',
+    name: 'Botanical',
+    icon: Leaf,
+    prompt: 'Transform to vintage botanical illustration style with detailed scientific accuracy, fine line work, muted natural colors, and classic botanical art aesthetics with Latin labels.',
+    color: '#556B2F',
+  },
+];
+
+const EditScreen = () => {
+  const { originalImage, stickerImage, stickerId } = useLocalSearchParams<{
+    originalImage: string;
+    stickerImage: string;
+    stickerId?: string;
+  }>();
+  const { saveSticker, getStickerById } = useUser();
+  const [editPrompt, setEditPrompt] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [currentVersionIndex, setCurrentVersionIndex] = useState<number>(0);
+  const [showPresets, setShowPresets] = useState<boolean>(true); // Show presets by default
+  const [showTextInput, setShowTextInput] = useState<boolean>(false); // Hide text input by default
+  const textInputRef = useRef<TextInput>(null);
+  const flatListRef = useRef<FlatList>(null);
+  const presetsScrollRef = useRef<ScrollView>(null);
+  const handleEditStickerRef = useRef<(customPrompt?: string) => Promise<void>>((customPrompt?: string) => Promise.resolve());
+  
+  // Initialize with data immediately if available for instant rendering
+  const [versions, setVersions] = useState<StickerVersion[]>(() => {
+    if (stickerImage || originalImage) {
+      return [{
+        id: 'original',
+        image: stickerImage || originalImage,
+        label: 'Original',
+        isOriginal: true,
+      }];
+    }
+    return [];
+  });
+  
+  // Only show loading if we need to fetch data
+  const [isInitializing, setIsInitializing] = useState<boolean>(!!stickerId && !stickerImage && !originalImage);
+  
+  // Load sticker data if using stickerId
+  React.useEffect(() => {
+    // Only load if we have stickerId but no direct image data
+    if (stickerId && !stickerImage && !originalImage && getStickerById) {
+      const loadSticker = async () => {
+        try {
+          const sticker = await getStickerById(stickerId);
+          if (sticker) {
+            setVersions([{
+              id: 'original',
+              image: sticker.stickerImage,
+              label: 'Original',
+              isOriginal: true,
+            }]);
+            
+            // Pre-populate the edit prompt with the saved title if available
+            // The title contains the user's original request
+            if (sticker.title) {
+              // Extract the meaningful part from the title
+              // Format is usually "Edit X: [user's request]..."
+              const titleParts = sticker.title.split(':');
+              if (titleParts.length > 1) {
+                // Get the user's request part and clean it up
+                const userRequest = titleParts[1].trim().replace('...', '');
+                setEditPrompt(userRequest);
+              } else {
+                // If no colon, use the whole title
+                setEditPrompt(sticker.title);
+              }
+            }
+          } else {
+            Alert.alert('Error', 'Sticker not found');
+            router.back();
+          }
+        } catch (error) {
+          console.error('Error loading sticker:', error);
+          Alert.alert('Error', 'Failed to load sticker');
+          router.back();
+        } finally {
+          setIsInitializing(false);
+        }
+      };
+      loadSticker();
+    }
+  }, [stickerId, getStickerById, stickerImage, originalImage]);
+
+  // Memoized and optimized image conversion
+  // Optimized image conversion with caching
+  const imageCache = React.useRef(new Map<string, string>());
+  
+  const convertImageToBase64 = React.useCallback(async (imageUri: string): Promise<string> => {
+    // Check cache first
+    if (imageCache.current.has(imageUri)) {
+      return imageCache.current.get(imageUri)!;
+    }
+    
+    try {
+      if (imageUri.startsWith('data:')) {
+        const base64 = imageUri.split(',')[1];
+        imageCache.current.set(imageUri, base64);
+        return base64;
+      }
+      
+      // For non-data URLs, assume they're already base64 or don't need conversion
+      // This avoids unnecessary fetching
+      imageCache.current.set(imageUri, imageUri);
+      return imageUri;
+    } catch (error: any) {
+      console.error('Error processing image:', error);
+      throw new Error('Failed to process image');
+    }
+  }, []);
+
+  // Local fallback for when API is unavailable
+  const createLocalFallbackEdit = React.useCallback(async (base64Data: string, promptToUse: string): Promise<ImageEditResponse> => {
+    console.log('Creating local fallback edit with style hint');
+    
+    // Create a simple style indicator overlay
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      return new Promise((resolve) => {
+        try {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          if (!ctx) {
+            resolve({
+              image: {
+                base64Data: base64Data,
+                mimeType: 'image/png'
+              }
+            });
+            return;
+          }
+          
+          // Set canvas size
+          canvas.width = 512;
+          canvas.height = 512;
+          
+          // Create a new image from base64
+          const img = new (window as any).Image();
+          img.crossOrigin = 'anonymous';
+          
+          img.onload = () => {
+            try {
+              // Draw original image
+              ctx.drawImage(img, 0, 0, 512, 512);
+              
+              // Apply filter based on prompt keywords
+              const lowerPrompt = promptToUse.toLowerCase();
+              
+              if (lowerPrompt.includes('watercolor')) {
+                ctx.filter = 'saturate(150%) contrast(90%) brightness(110%)';
+                ctx.drawImage(img, 0, 0, 512, 512);
+                ctx.filter = 'none';
+                ctx.globalAlpha = 0.1;
+                ctx.fillStyle = '#87CEEB';
+                ctx.fillRect(0, 0, 512, 512);
+              } else if (lowerPrompt.includes('vintage') || lowerPrompt.includes('retro')) {
+                ctx.filter = 'sepia(40%) contrast(95%) brightness(105%)';
+                ctx.drawImage(img, 0, 0, 512, 512);
+              } else if (lowerPrompt.includes('kawaii') || lowerPrompt.includes('cute')) {
+                ctx.filter = 'saturate(120%) brightness(115%) contrast(95%)';
+                ctx.drawImage(img, 0, 0, 512, 512);
+                ctx.filter = 'none';
+                ctx.globalAlpha = 0.08;
+                ctx.fillStyle = '#FFB6C1';
+                ctx.fillRect(0, 0, 512, 512);
+              } else if (lowerPrompt.includes('minimalist') || lowerPrompt.includes('simple')) {
+                ctx.filter = 'contrast(110%) brightness(105%)';
+                ctx.drawImage(img, 0, 0, 512, 512);
+              } else if (lowerPrompt.includes('boho') || lowerPrompt.includes('bohemian')) {
+                ctx.filter = 'sepia(20%) saturate(90%) contrast(105%)';
+                ctx.drawImage(img, 0, 0, 512, 512);
+              } else if (lowerPrompt.includes('floral') || lowerPrompt.includes('botanical')) {
+                ctx.filter = 'saturate(130%) brightness(108%)';
+                ctx.drawImage(img, 0, 0, 512, 512);
+              } else if (lowerPrompt.includes('geometric')) {
+                ctx.filter = 'contrast(120%) saturate(90%)';
+                ctx.drawImage(img, 0, 0, 512, 512);
+              } else if (lowerPrompt.includes('sketch') || lowerPrompt.includes('hand-drawn')) {
+                ctx.filter = 'grayscale(100%) contrast(150%)';
+                ctx.drawImage(img, 0, 0, 512, 512);
+              } else {
+                // Default enhancement
+                ctx.filter = 'contrast(105%) brightness(105%) saturate(105%)';
+                ctx.drawImage(img, 0, 0, 512, 512);
+              }
+              
+              ctx.filter = 'none';
+              ctx.globalAlpha = 1.0;
+              
+              // Convert to base64
+              canvas.toBlob(
+                (blob) => {
+                  if (!blob) {
+                    resolve({
+                      image: {
+                        base64Data: base64Data,
+                        mimeType: 'image/png'
+                      }
+                    });
+                    return;
+                  }
+                  
+                  const reader = new FileReader();
+                  reader.onloadend = () => {
+                    const result = reader.result as string;
+                    const base64Result = result.split(',')[1];
+                    resolve({
+                      image: {
+                        base64Data: base64Result,
+                        mimeType: 'image/png'
+                      }
+                    });
+                  };
+                  reader.readAsDataURL(blob);
+                },
+                'image/png',
+                0.9
+              );
+            } catch (error) {
+              console.error('Error in image processing:', error);
+              resolve({
+                image: {
+                  base64Data: base64Data,
+                  mimeType: 'image/png'
+                }
+              });
+            }
+          };
+          
+          img.onerror = () => {
+            console.error('Failed to load image for fallback processing');
+            resolve({
+              image: {
+                base64Data: base64Data,
+                mimeType: 'image/png'
+              }
+            });
+          };
+          
+          // Load the image
+          img.src = `data:image/png;base64,${base64Data}`;
+        } catch (error) {
+          console.error('Fallback processing failed:', error);
+          resolve({
+            image: {
+              base64Data: base64Data,
+              mimeType: 'image/png'
+            }
+          });
+        }
+      });
+    }
+    
+    // Return original if not on web
+    return {
+      image: {
+        base64Data: base64Data,
+        mimeType: 'image/png'
+      }
+    };
+  }, []);
+
+
+
+  const processEditWithRetry = React.useCallback(async (base64Data: string, promptToUse: string, retryCount: number = 0): Promise<ImageEditResponse> => {
+    const maxRetries = 0; // No retries - fail fast
+    const timeout = 4000; // 4 seconds timeout
+    
+    // First apply the edit with the user's prompt
+    const requestBody: ImageEditRequest = {
+      prompt: promptToUse + " Keep the sticker style clean and suitable for die-cut printing.",
+      images: [{ type: 'image', image: base64Data }],
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      console.log(`Sending edit request (attempt ${retryCount + 1}/${maxRetries + 1})...`);
+      
+      const response = await fetch('https://toolkit.rork.com/images/edit/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      // Handle gateway errors immediately with fallback
+      if (response.status >= 502 && response.status <= 504) {
+        console.log(`Server temporarily unavailable (${response.status}) - using style fallback`);
+        return await createLocalFallbackEdit(base64Data, promptToUse);
+      }
+      
+      if (response.status === 429) {
+        console.log('Rate limited - using style fallback');
+        return await createLocalFallbackEdit(base64Data, promptToUse);
+      }
+
+      if (!response.ok) {
+        console.log(`API Error ${response.status} - using style fallback`);
+        return await createLocalFallbackEdit(base64Data, promptToUse);
+      }
+
+      const responseText = await response.text();
+      
+      // Check for HTML error pages
+      if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
+        console.log('Received error page - using style fallback');
+        return await createLocalFallbackEdit(base64Data, promptToUse);
+      }
+      
+      // Try to parse JSON
+      const jsonResult = safeJsonParse<ImageEditResponse>(responseText);
+      
+      if (!jsonResult.success) {
+        console.log('Invalid response format - using style fallback');
+        return await createLocalFallbackEdit(base64Data, promptToUse);
+      }
+      
+      const data = jsonResult.data!;
+      
+      // Validate response
+      if (!data?.image?.base64Data) {
+        console.log('Incomplete response - using style fallback');
+        return await createLocalFallbackEdit(base64Data, promptToUse);
+      }
+      
+      console.log('Edit completed successfully!');
+      
+      // Skip background removal for AI-generated stickers (they already have transparent backgrounds)
+      // Only do auto-cropping
+      console.log('Processing AI-generated sticker...');
+      
+      const cleanupPromise = processStickerImage(data.image.base64Data, false, true); // Skip bg removal for AI stickers
+      const timeoutPromise = new Promise<string>((resolve) => 
+        setTimeout(() => {
+          console.log('Processing timeout, using unprocessed image');
+          resolve(data.image.base64Data);
+        }, 3000) // 3 second timeout for just cropping
+      );
+      
+      const cleanedBase64 = await Promise.race([cleanupPromise, timeoutPromise]);
+      
+      return {
+        image: {
+          base64Data: cleanedBase64,
+          mimeType: data.image.mimeType
+        }
+      };
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      
+      // Handle timeout
+      if (error.name === 'AbortError') {
+        if (retryCount < maxRetries) {
+          console.log('Request timed out, retrying...');
+          await new Promise(resolve => setTimeout(resolve, 500));
+          return processEditWithRetry(base64Data, promptToUse, retryCount + 1);
+        }
+        console.log('Request timed out - using style fallback');
+        return await createLocalFallbackEdit(base64Data, promptToUse);
+      }
+      
+      // Handle network errors with retry
+      if (retryCount < maxRetries && (error.message.includes('network') || error.message.includes('fetch'))) {
+        console.log('Network error, retrying...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        return processEditWithRetry(base64Data, promptToUse, retryCount + 1);
+      }
+      
+      // For all other errors, use fallback
+      console.log('Processing error - using style fallback');
+      const fallbackResult = await createLocalFallbackEdit(base64Data, promptToUse);
+      
+      // Skip cleanup on fallback to save time
+      return fallbackResult;
+    }
+  }, [createLocalFallbackEdit]);
+
+  const handleApplyPreset = React.useCallback((preset: StylePreset) => {
+    // Dismiss keyboard when applying preset
+    Keyboard.dismiss();
+    
+    // Check if we have a sticker image to edit
+    if (versions.length === 0 || !versions[currentVersionIndex]?.image) {
+      Alert.alert('Error', 'No sticker image available to edit. Please wait for the sticker to load.');
+      return;
+    }
+    
+    // Validate image URI before processing
+    const currentImage = versions[currentVersionIndex].image;
+    if (!currentImage || currentImage.trim() === '') {
+      Alert.alert('Error', 'Invalid sticker image. Please try again.');
+      return;
+    }
+    
+    console.log(`Applying ${preset.name} style preset...`);
+    setEditPrompt(preset.prompt);
+    setShowPresets(false);
+    
+    // Trigger edit with the preset prompt after state update
+    setTimeout(() => {
+      handleEditStickerRef.current(preset.prompt);
+    }, 0);
+  }, [versions, currentVersionIndex]);
+
+  const handleEditSticker = React.useCallback(async (customPrompt?: string) => {
+    const promptToUse = customPrompt || editPrompt;
+    
+    if (!promptToUse.trim()) {
+      Alert.alert('Edit Request Required', 'Please describe what changes you\'d like to make to the sticker or select a style preset.');
+      return;
+    }
+
+    // Dismiss keyboard when starting edit
+    Keyboard.dismiss();
+
+    // IMPORTANT: Always use the ORIGINAL sticker (first version) as the base for edits
+    // This ensures we're editing the original sticker with the new prompt, not editing edits
+    const originalStickerImage = versions[0]?.image;
+    if (!originalStickerImage || originalStickerImage.trim() === '') {
+      Alert.alert('Error', 'No valid original sticker image found to edit. Please go back and try again.');
+      return;
+    }
+
+    // Immediate UI feedback
+    setIsProcessing(true);
+    console.log('Starting sticker edit...');
+
+    try {
+      // Always convert the ORIGINAL sticker for editing
+      let base64Data = await convertImageToBase64(originalStickerImage);
+      
+      // Check image size and compress if needed
+      const imageSizeMB = estimateBase64Size(base64Data);
+      console.log(`Image size: ${imageSizeMB.toFixed(2)}MB`);
+      
+      if (imageSizeMB > 0.5) { // More aggressive compression threshold
+        console.log('Optimizing image for processing...');
+        base64Data = await compressBase64Image(base64Data, 512, 512, 0.6); // Even more aggressive compression
+        const newSizeMB = estimateBase64Size(base64Data);
+        console.log(`Image optimized: ${newSizeMB.toFixed(2)}MB`);
+      }
+      
+      console.log('Starting edit processing...');
+      
+      // Process the edit - fallback is handled internally now
+      const data = await processEditWithRetry(base64Data, promptToUse);
+      const editedImageUri = `data:${data.image.mimeType};base64,${data.image.base64Data}`;
+      
+      // Add new version to the list
+      const newVersion: StickerVersion = {
+        id: Date.now().toString(),
+        image: editedImageUri,
+        label: `Edit ${versions.length}`,
+      };
+      
+      const updatedVersions = [...versions, newVersion];
+      setVersions(updatedVersions);
+      
+      // Navigate to the new version
+      const newIndex = updatedVersions.length - 1;
+      setCurrentVersionIndex(newIndex);
+      
+      // Scroll to new version with a slight delay to ensure FlatList is updated
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({ 
+          index: newIndex, 
+          animated: true 
+        });
+      }, 100);
+      
+      console.log('Edit processing complete!');
+      
+      // Success - no alert needed since fallback is seamless
+    } catch (error: any) {
+      console.error('Error editing sticker:', error);
+      Alert.alert('Edit Error', 'Failed to process the edit. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [editPrompt, convertImageToBase64, processEditWithRetry, versions]);
+  
+  // Update the ref whenever handleEditSticker changes
+  React.useEffect(() => {
+    handleEditStickerRef.current = handleEditSticker;
+  }, [handleEditSticker]);
+
+  const handleSaveAndPurchase = React.useCallback(async () => {
+    const currentVersion = versions[currentVersionIndex];
+    // Allow saving any version including the original
+    if (!currentVersion || !currentVersion.image || currentVersion.image.trim() === '') {
+      Alert.alert('Error', 'No sticker image available to save.');
+      return;
+    }
+
+    try {
+      // Use the first version (original) as the base image if originalImage is not provided
+      const baseImage = originalImage || versions[0]?.image;
+      if (!baseImage) {
+        Alert.alert('Error', 'No base image found.');
+        return;
+      }
+      
+      // Save with the edit prompt so it can be reused when editing again
+      const titleToSave = editPrompt.trim() ? editPrompt : `${currentVersion.label} version`;
+      await saveSticker(baseImage, currentVersion.image, titleToSave);
+      
+      Alert.alert(
+        'Sticker Saved!',
+        'Your edited sticker has been saved to your gallery. Would you like to purchase it now?',
+        [
+          { text: 'Later', style: 'cancel' },
+          {
+            text: 'Purchase Now',
+            onPress: () => {
+              router.push({
+                pathname: '/checkout',
+                params: {
+                  originalImage: baseImage,
+                  finalStickers: currentVersion.image,
+                  isReorder: 'false',
+                },
+              });
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Error saving edited sticker:', error);
+      Alert.alert('Save Error', 'Failed to save the edited sticker. Please try again.');
+    }
+  }, [versions, currentVersionIndex, originalImage, editPrompt, saveSticker]);
+
+  const navigateToVersion = React.useCallback((index: number) => {
+    if (index >= 0 && index < versions.length) {
+      setCurrentVersionIndex(index);
+      flatListRef.current?.scrollToIndex({ 
+        index, 
+        animated: true 
+      });
+    }
+  }, [versions.length]);
+
+  const handleResetToOriginal = React.useCallback(() => {
+    Alert.alert(
+      'Reset to Original',
+      'This will clear all edits and return to the original sticker. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: () => {
+            setVersions([versions[0]]); // Keep only original
+            setCurrentVersionIndex(0);
+            setEditPrompt('');
+          },
+        },
+      ]
+    );
+  }, [versions]);
+
+  const renderVersionItem = React.useCallback(({ item, index }: { item: StickerVersion; index: number }) => (
+    <View style={styles.versionContainer}>
+      <Image 
+        source={{ uri: item.image }} 
+        style={styles.versionImage} 
+        resizeMode="contain"
+      />
+      <View style={styles.versionOverlay}>
+        <View style={[styles.versionBadge, item.isOriginal && styles.originalBadge]}>
+          {item.isOriginal && <RotateCcw size={12} color={neutralColors.white} />}
+          <Text style={styles.versionBadgeText}>{item.label}</Text>
+        </View>
+      </View>
+    </View>
+  ), []);
+
+  const handleGoBack = React.useCallback(() => {
+    if (isProcessing) {
+      Alert.alert(
+        'Processing in Progress',
+        'Please wait for the edit to complete before going back.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    router.back();
+  }, [isProcessing]);
+
+  // Show loading state while initializing
+  if (isInitializing) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={neutralColors.primary} />
+        <Text style={styles.loadingText}>Loading sticker...</Text>
+      </View>
+    );
+  }
+  
+  return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton} 
+            onPress={handleGoBack}
+            disabled={isProcessing}
+          >
+            <ArrowLeft size={20} color={neutralColors.text.primary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Edit Sticker</Text>
+          {versions.length > 1 && (
+            <TouchableOpacity
+              style={styles.resetButton}
+              onPress={handleResetToOriginal}
+            >
+              <RotateCcw size={16} color={neutralColors.text.secondary} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={styles.mainContent}>
+          {/* Full Screen Version Gallery */}
+          <View style={styles.galleryContainer}>
+            <FlatList
+              ref={flatListRef}
+              data={versions}
+              renderItem={renderVersionItem}
+              keyExtractor={(item) => item.id}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
+              snapToInterval={screenWidth}
+              snapToAlignment="start"
+              bounces={false}
+              scrollEventThrottle={16}
+              onScroll={(event) => {
+                const index = Math.round(event.nativeEvent.contentOffset.x / screenWidth);
+                if (index !== currentVersionIndex && index >= 0 && index < versions.length) {
+                  setCurrentVersionIndex(index);
+                }
+              }}
+              getItemLayout={(data, index) => ({
+                length: screenWidth,
+                offset: screenWidth * index,
+                index,
+              })}
+            />
+                
+            {/* Navigation Arrows */}
+            {versions.length > 1 && (
+              <>
+                {currentVersionIndex > 0 && (
+                  <TouchableOpacity
+                    style={[styles.navArrow, styles.navArrowLeft]}
+                    onPress={() => navigateToVersion(currentVersionIndex - 1)}
+                  >
+                    <ChevronLeft size={28} color={neutralColors.white} />
+                  </TouchableOpacity>
+                )}
+                {currentVersionIndex < versions.length - 1 && (
+                  <TouchableOpacity
+                    style={[styles.navArrow, styles.navArrowRight]}
+                    onPress={() => navigateToVersion(currentVersionIndex + 1)}
+                  >
+                    <ChevronRight size={28} color={neutralColors.white} />
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+            
+            {/* Version Indicator */}
+            {versions.length > 1 && (
+              <View style={styles.versionIndicator}>
+                <Text style={styles.versionIndicatorText}>
+                  {currentVersionIndex + 1} of {versions.length}
+                </Text>
+              </View>
+            )}
+          </View>
+              
+          {/* Version Dots */}
+          {versions.length > 1 && (
+            <View style={styles.versionDots}>
+              {versions.map((_, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.versionDot,
+                    index === currentVersionIndex && styles.versionDotActive,
+                  ]}
+                  onPress={() => navigateToVersion(index)}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Edit Tools Section */}
+          <View style={styles.editToolsContainer}>
+            {/* Style Presets */}
+            {showPresets && (
+              <View style={styles.presetsSection}>
+                <ScrollView
+                  ref={presetsScrollRef}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.presetsScroll}
+                  contentContainerStyle={styles.presetsContent}
+                >
+                  {STYLE_PRESETS.map((preset) => {
+                    const Icon = preset.icon;
+                    return (
+                      <TouchableOpacity
+                        key={preset.id}
+                        style={[
+                          styles.presetCard,
+                          { borderColor: preset.color },
+                          (isProcessing || versions.length === 0) && styles.presetCardDisabled
+                        ]}
+                        onPress={() => handleApplyPreset(preset)}
+                        disabled={isProcessing || versions.length === 0}
+                      >
+                        <View 
+                          style={[
+                            styles.presetIconContainer,
+                            { backgroundColor: `${preset.color}20` }
+                          ]}
+                        >
+                          <Icon size={20} color={preset.color} />
+                        </View>
+                        <Text style={styles.presetName}>{preset.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Custom Text Input */}
+            {showTextInput && (
+              <KeyboardAvoidingView 
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 60}
+              >
+                <View style={styles.promptContainer}>
+                  <TextInput
+                    ref={textInputRef}
+                    style={styles.promptInput}
+                    value={editPrompt}
+                    onChangeText={setEditPrompt}
+                    placeholder="Describe your changes..."
+                    placeholderTextColor={neutralColors.text.secondary}
+                    multiline
+                    textAlignVertical="top"
+                    editable={!isProcessing}
+                    returnKeyType="done"
+                    blurOnSubmit={true}
+                    onSubmitEditing={Keyboard.dismiss}
+                    selectionColor={neutralColors.primary}
+                    underlineColorAndroid="transparent"
+                    autoCorrect={false}
+                    spellCheck={false}
+                  />
+                </View>
+              </KeyboardAvoidingView>
+            )}
+
+            {/* Action Buttons */}
+            <View style={styles.buttonContainer}>
+              <View style={styles.toolButtons}>
+                <TouchableOpacity
+                  style={[
+                    styles.toolButton,
+                    showPresets && styles.toolButtonActive
+                  ]}
+                  onPress={() => {
+                    setShowPresets(!showPresets);
+                    setShowTextInput(false);
+                    if (showTextInput) {
+                      Keyboard.dismiss();
+                    }
+                  }}
+                >
+                  <Palette size={20} color={showPresets ? neutralColors.white : neutralColors.primary} />
+                  <Text style={[styles.toolButtonText, showPresets && styles.toolButtonTextActive]}>Styles</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.toolButton,
+                    showTextInput && styles.toolButtonActive
+                  ]}
+                  onPress={() => {
+                    setShowTextInput(!showTextInput);
+                    setShowPresets(false);
+                    if (!showTextInput) {
+                      setTimeout(() => textInputRef.current?.focus(), 100);
+                    } else {
+                      Keyboard.dismiss();
+                    }
+                  }}
+                >
+                  <PenTool size={20} color={showTextInput ? neutralColors.white : neutralColors.primary} />
+                  <Text style={[styles.toolButtonText, showTextInput && styles.toolButtonTextActive]}>Custom</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <TouchableOpacity
+                style={[
+                  styles.editButton,
+                  isProcessing && styles.editButtonDisabled,
+                  (!editPrompt.trim() && !showPresets) && styles.editButtonDisabled,
+                ]}
+                onPress={() => handleEditSticker()}
+                disabled={isProcessing || (!editPrompt.trim() && !showPresets)}
+                activeOpacity={0.8}
+              >
+                {isProcessing ? (
+                  <>
+                    <ActivityIndicator size="small" color={neutralColors.white} />
+                    <Text style={styles.editButtonText}>Processing...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={20} color={neutralColors.white} />
+                    <Text style={styles.editButtonText}>Apply Edit</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              
+              {versions.length >= 1 && (
+                <TouchableOpacity
+                  style={styles.saveButton}
+                  onPress={handleSaveAndPurchase}
+                  disabled={isProcessing}
+                >
+                  <Save size={18} color={neutralColors.white} />
+                  <Text style={styles.saveButtonText}>Save & Purchase</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+        </SafeAreaView>
+      </View>
+    </TouchableWithoutFeedback>
+  );
+};
+
+export default React.memo(EditScreen);
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: neutralColors.background,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  keyboardAvoid: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: neutralColors.border,
+    backgroundColor: neutralColors.white,
+  },
+  backButton: {
+    padding: 6,
+    borderRadius: 10,
+    backgroundColor: neutralColors.surface,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: neutralColors.text.primary,
+  },
+  headerSpacer: {
+    width: 36,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 16,
+    paddingBottom: 260,
+  },
+  galleryContainer: {
+    flex: 1,
+    backgroundColor: neutralColors.white,
+    marginBottom: 8,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  versionContainer: {
+    width: screenWidth,
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    paddingVertical: 20,
+    backgroundColor: neutralColors.white,
+  },
+  versionImage: {
+    width: '85%',
+    height: '85%',
+  },
+  versionOverlay: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+  },
+  versionBadge: {
+    backgroundColor: neutralColors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    shadowColor: neutralColors.gray900,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  originalBadge: {
+    backgroundColor: neutralColors.text.secondary,
+  },
+  versionBadgeText: {
+    color: neutralColors.white,
+    fontSize: 12,
+    fontWeight: '600' as const,
+  },
+  navArrow: {
+    position: 'absolute',
+    top: '50%',
+    marginTop: -26,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  navArrowLeft: {
+    left: 16,
+  },
+  navArrowRight: {
+    right: 16,
+  },
+  versionIndicator: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  versionIndicatorText: {
+    color: neutralColors.white,
+    fontSize: 12,
+    fontWeight: '500' as const,
+  },
+  versionDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  versionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: neutralColors.border,
+  },
+  versionDotActive: {
+    backgroundColor: neutralColors.primary,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  promptContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  promptInputContainer: {
+    backgroundColor: neutralColors.white,
+    borderWidth: 1,
+    borderColor: neutralColors.border,
+    borderRadius: 16,
+    shadowColor: neutralColors.gray900,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  promptLabel: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: neutralColors.text.primary,
+    marginBottom: 8,
+  },
+  promptInput: {
+    padding: 12,
+    fontSize: 15,
+    color: neutralColors.text.primary,
+    backgroundColor: neutralColors.white,
+    borderWidth: 1,
+    borderColor: neutralColors.border,
+    borderRadius: 12,
+    minHeight: 80,
+    maxHeight: 120,
+    textAlignVertical: 'top',
+    includeFontPadding: false,
+    lineHeight: 20,
+  },
+  buttonContainer: {
+    paddingHorizontal: 20,
+    gap: 10,
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  resetButton: {
+    padding: 6,
+    borderRadius: 10,
+    backgroundColor: neutralColors.surface,
+  },
+  resetButtonText: {
+    color: neutralColors.text.secondary,
+    fontSize: 14,
+    fontWeight: '500' as const,
+  },
+  editButton: {
+    backgroundColor: neutralColors.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: neutralColors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  editButtonDisabled: {
+    opacity: 0.6,
+  },
+  editButtonText: {
+    color: neutralColors.white,
+    fontSize: 15,
+    fontWeight: '600' as const,
+  },
+  saveButton: {
+    backgroundColor: neutralColors.success,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: neutralColors.success,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  saveButtonText: {
+    color: neutralColors.white,
+    fontSize: 15,
+    fontWeight: '600' as const,
+  },
+  presetsSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  presetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  presetTitle: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: neutralColors.text.primary,
+  },
+  presetToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: neutralColors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: neutralColors.border,
+  },
+  presetToggleText: {
+    fontSize: 13,
+    fontWeight: '500' as const,
+    color: neutralColors.primary,
+  },
+  presetsScroll: {
+    flexGrow: 0,
+  },
+  presetsContent: {
+    paddingRight: 20,
+    gap: 10,
+  },
+  presetCard: {
+    backgroundColor: neutralColors.white,
+    borderRadius: 12,
+    padding: 10,
+    alignItems: 'center',
+    minWidth: 80,
+    borderWidth: 2,
+    shadowColor: neutralColors.gray900,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  presetIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  presetName: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: neutralColors.text.primary,
+    textAlign: 'center',
+  },
+  presetCardDisabled: {
+    opacity: 0.5,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: neutralColors.text.secondary,
+  },
+  mainContent: {
+    flex: 1,
+    position: 'relative',
+  },
+  editToolsContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: neutralColors.background,
+    borderTopWidth: 1,
+    borderTopColor: neutralColors.border,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
+    shadowColor: neutralColors.gray900,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  toolButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  toolButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: neutralColors.surface,
+    borderWidth: 1,
+    borderColor: neutralColors.border,
+  },
+  toolButtonActive: {
+    backgroundColor: neutralColors.primary,
+    borderColor: neutralColors.primary,
+  },
+  toolButtonText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: neutralColors.primary,
+  },
+  toolButtonTextActive: {
+    color: neutralColors.white,
+  },
+});
