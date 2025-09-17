@@ -46,8 +46,20 @@ export default function LoginForm({ onLogin, onSignup }: LoginFormProps) {
     setIsLoading(true);
     try {
       await onLogin(e, p);
-    } catch (error) {
-      Alert.alert('Login Error', 'Failed to log in. Please try again.');
+    } catch (error: any) {
+      const message = typeof error?.message === 'string' ? error.message : 'Failed to log in. Please try again.';
+      if (message.toLowerCase().includes('invalid')) {
+        Alert.alert(
+          'Invalid email or password',
+          'If you are new, create an account first.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Create Account', onPress: () => setMode('signup') },
+          ]
+        );
+      } else {
+        Alert.alert('Login Error', message);
+      }
     } finally {
       setIsLoading(false);
     }

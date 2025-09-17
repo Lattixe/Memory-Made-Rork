@@ -91,9 +91,24 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input: { email, password } }),
       });
-      const json = await res.json();
+
+      let json: any = null;
+      try {
+        json = await res.json();
+      } catch (e) {
+        console.error('Login JSON parse failed');
+      }
+
+      if (json?.error) {
+        const message: string = json.error.message ?? 'Login failed';
+        throw new Error(message);
+      }
+
       const result = (json?.result?.data?.json) as { id: string; email: string; name: string; token: string } | undefined;
-      if (!result?.token) throw new Error('Invalid credentials');
+      if (!result?.token) {
+        throw new Error('Invalid email or password');
+      }
+
       const authed: User = { id: result.id, email: result.email, name: result.name, token: result.token };
       await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authed));
       setUser(authed);
@@ -111,7 +126,19 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input: { email, password, name } }),
       });
-      const json = await res.json();
+
+      let json: any = null;
+      try {
+        json = await res.json();
+      } catch (e) {
+        console.error('Signup JSON parse failed');
+      }
+
+      if (json?.error) {
+        const message: string = json.error.message ?? 'Signup failed';
+        throw new Error(message);
+      }
+
       const result = (json?.result?.data?.json) as { id: string; email: string; name: string; token: string } | undefined;
       if (!result?.token) throw new Error('Signup failed');
       const authed: User = { id: result.id, email: result.email, name: result.name, token: result.token };
