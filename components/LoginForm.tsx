@@ -85,8 +85,21 @@ export default function LoginForm({ onLogin, onSignup }: LoginFormProps) {
     setIsLoading(true);
     try {
       await onSignup(e, p, n);
-    } catch (e) {
-      Alert.alert('Signup Error', 'Failed to sign up.');
+    } catch (error: any) {
+      const raw = typeof error?.message === 'string' ? error.message : 'Signup failed';
+      const message = raw || 'Signup failed';
+      if (message.toLowerCase().includes('email already in use')) {
+        Alert.alert(
+          'Email Already Registered',
+          'Try logging in instead.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Log In', onPress: () => setMode('login') },
+          ]
+        );
+      } else {
+        Alert.alert('Signup Error', message);
+      }
     } finally {
       setIsLoading(false);
     }

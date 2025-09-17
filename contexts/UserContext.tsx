@@ -86,9 +86,11 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
 
   const login = useCallback(async (email: string, password: string) => {
     try {
-      const res = await fetch(`${process.env.EXPO_PUBLIC_RORK_API_BASE_URL}/api/trpc/auth.login`, {
+      const base = process.env.EXPO_PUBLIC_RORK_API_BASE_URL ?? '';
+      const url = `${base}/api/trpc/auth.login`;
+      const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({ input: { email, password } }),
       });
 
@@ -99,17 +101,23 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
         console.error('Login JSON parse failed');
       }
 
-      if (json?.error) {
-        const message: string = json.error.message ?? 'Login failed';
+      if (!res.ok || json?.error) {
+        const message: string = json?.error?.message ?? `Login failed (${res.status})`;
+        console.error('[auth] login response error:', json);
         throw new Error(message);
       }
 
-      const result = (json?.result?.data?.json) as { id: string; email: string; name: string; token: string } | undefined;
-      if (!result?.token) {
+      const result = (json?.result?.data?.json)
+        ?? (json?.result?.data)
+        ?? json?.result
+        ?? json;
+      const token: string | undefined = result?.token;
+      if (!token) {
+        console.error('[auth] login unexpected response shape:', json);
         throw new Error('Invalid email or password');
       }
 
-      const authed: User = { id: result.id, email: result.email, name: result.name, token: result.token };
+      const authed: User = { id: result.id, email: result.email, name: result.name, token };
       await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authed));
       setUser(authed);
       setAuthToken(authed.token);
@@ -121,9 +129,11 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
 
   const signup = useCallback(async (email: string, password: string, name?: string) => {
     try {
-      const res = await fetch(`${process.env.EXPO_PUBLIC_RORK_API_BASE_URL}/api/trpc/auth.signup`, {
+      const base = process.env.EXPO_PUBLIC_RORK_API_BASE_URL ?? '';
+      const url = `${base}/api/trpc/auth.signup`;
+      const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({ input: { email, password, name } }),
       });
 
@@ -134,14 +144,22 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
         console.error('Signup JSON parse failed');
       }
 
-      if (json?.error) {
-        const message: string = json.error.message ?? 'Signup failed';
+      if (!res.ok || json?.error) {
+        const message: string = json?.error?.message ?? `Signup failed (${res.status})`;
+        console.error('[auth] signup response error:', json);
         throw new Error(message);
       }
 
-      const result = (json?.result?.data?.json) as { id: string; email: string; name: string; token: string } | undefined;
-      if (!result?.token) throw new Error('Signup failed');
-      const authed: User = { id: result.id, email: result.email, name: result.name, token: result.token };
+      const result = (json?.result?.data?.json)
+        ?? (json?.result?.data)
+        ?? json?.result
+        ?? json;
+      const token: string | undefined = result?.token;
+      if (!token) {
+        console.error('[auth] signup unexpected response shape:', json);
+        throw new Error('Signup failed');
+      }
+      const authed: User = { id: result.id, email: result.email, name: result.name, token };
       await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authed));
       setUser(authed);
       setAuthToken(authed.token);
