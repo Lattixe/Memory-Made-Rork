@@ -3,6 +3,7 @@ import { setAuthToken } from '@/lib/authToken';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import { safeJsonParse } from '@/utils/json';
+import { trpcClient } from '@/lib/trpc';
 
 export interface SavedSticker {
   id: string;
@@ -86,41 +87,20 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
 
   const login = useCallback(async (email: string, password: string) => {
     try {
-      const base = process.env.EXPO_PUBLIC_RORK_API_BASE_URL ?? '';
-      const url = `${base}/api/trpc/auth.login`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ input: { email, password } }),
-      });
-
-      let json: any = null;
-      try {
-        json = await res.json();
-      } catch (e) {
-        console.error('Login JSON parse failed');
-      }
-
-      if (!res.ok || json?.error) {
-        const message: string = json?.error?.message ?? `Login failed (${res.status})`;
-        console.error('[auth] login response error:', json);
-        throw new Error(message);
-      }
-
-      const result = (json?.result?.data?.json)
-        ?? (json?.result?.data)
-        ?? json?.result
-        ?? json;
-      const token: string | undefined = result?.token;
-      if (!token) {
-        console.error('[auth] login unexpected response shape:', json);
-        throw new Error('Invalid email or password');
-      }
-
-      const authed: User = { id: result.id, email: result.email, name: result.name, token };
+      console.log('[auth] Attempting login for:', email);
+      const result = await trpcClient.auth.login.mutate({ email, password });
+      console.log('[auth] Login successful:', { id: result.id, email: result.email, name: result.name });
+      
+      const authed: User = { 
+        id: result.id, 
+        email: result.email, 
+        name: result.name, 
+        token: result.token 
+      };
+      
       await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authed));
       setUser(authed);
-      setAuthToken(authed.token);
+      setAuthToken(result.token);
     } catch (error) {
       console.error('Error logging in:', error);
       throw error;
@@ -129,40 +109,20 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
 
   const signup = useCallback(async (email: string, password: string, name?: string) => {
     try {
-      const base = process.env.EXPO_PUBLIC_RORK_API_BASE_URL ?? '';
-      const url = `${base}/api/trpc/auth.signup`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ input: { email, password, name } }),
-      });
-
-      let json: any = null;
-      try {
-        json = await res.json();
-      } catch (e) {
-        console.error('Signup JSON parse failed');
-      }
-
-      if (!res.ok || json?.error) {
-        const message: string = json?.error?.message ?? `Signup failed (${res.status})`;
-        console.error('[auth] signup response error:', json);
-        throw new Error(message);
-      }
-
-      const result = (json?.result?.data?.json)
-        ?? (json?.result?.data)
-        ?? json?.result
-        ?? json;
-      const token: string | undefined = result?.token;
-      if (!token) {
-        console.error('[auth] signup unexpected response shape:', json);
-        throw new Error('Signup failed');
-      }
-      const authed: User = { id: result.id, email: result.email, name: result.name, token };
+      console.log('[auth] Attempting signup for:', email);
+      const result = await trpcClient.auth.signup.mutate({ email, password, name });
+      console.log('[auth] Signup successful:', { id: result.id, email: result.email, name: result.name });
+      
+      const authed: User = { 
+        id: result.id, 
+        email: result.email, 
+        name: result.name, 
+        token: result.token 
+      };
+      
       await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authed));
       setUser(authed);
-      setAuthToken(authed.token);
+      setAuthToken(result.token);
     } catch (error) {
       console.error('Error signing up:', error);
       throw error;
