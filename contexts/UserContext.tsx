@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { setAuthToken } from '@/lib/authToken';
+import { setAuthToken } from '../lib/authToken';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import { safeJsonParse } from '@/utils/json';
@@ -101,9 +101,19 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
       await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authed));
       setUser(authed);
       setAuthToken(result.token);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error logging in:', error);
-      throw error;
+      
+      // Enhanced error handling
+      if (error?.message?.includes('404')) {
+        throw new Error('Authentication service not available. Please try again later.');
+      } else if (error?.message?.includes('Invalid')) {
+        throw new Error('Invalid credentials');
+      } else if (error?.message?.includes('fetch')) {
+        throw new Error('Network error. Please check your connection.');
+      } else {
+        throw new Error(error?.message || 'Login failed. Please try again.');
+      }
     }
   }, []);
 
@@ -123,9 +133,19 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
       await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authed));
       setUser(authed);
       setAuthToken(result.token);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error signing up:', error);
-      throw error;
+      
+      // Enhanced error handling
+      if (error?.message?.includes('404')) {
+        throw new Error('Authentication service not available. Please try again later.');
+      } else if (error?.message?.includes('already in use')) {
+        throw new Error('Email already in use');
+      } else if (error?.message?.includes('fetch')) {
+        throw new Error('Network error. Please check your connection.');
+      } else {
+        throw new Error(error?.message || 'Signup failed. Please try again.');
+      }
     }
   }, []);
 

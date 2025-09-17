@@ -22,7 +22,23 @@ app.use(
 
 // Simple health check endpoint
 app.get("/", (c) => {
+  console.log('[backend] Health check endpoint hit');
   return c.json({ status: "ok", message: "API is running" });
+});
+
+// Debug endpoint to check if backend is working
+app.get("/debug", (c) => {
+  console.log('[backend] Debug endpoint hit');
+  return c.json({ 
+    status: "ok", 
+    message: "Backend is working",
+    timestamp: new Date().toISOString(),
+    routes: {
+      health: "/api/",
+      trpc: "/api/trpc",
+      debug: "/api/debug"
+    }
+  });
 });
 
 export default app;

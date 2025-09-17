@@ -12,6 +12,7 @@ const SignupInput = z.object({
 export default publicProcedure
   .input(SignupInput)
   .mutation(async ({ input }) => {
+    console.log('[signup] Signup procedure called');
     console.log('[signup] Attempting signup for:', input.email);
     
     const exists = getUserByEmail(input.email);

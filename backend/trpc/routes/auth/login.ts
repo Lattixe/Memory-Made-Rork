@@ -11,6 +11,7 @@ const LoginInput = z.object({
 export default publicProcedure
   .input(LoginInput)
   .mutation(async ({ input }) => {
+    console.log('[login] Login procedure called');
     console.log('[login] Attempting login for:', input.email);
     
     const user = await verifyUser(input.email, input.password);
