@@ -17,8 +17,21 @@ app.use(
     endpoint: "/api/trpc",
     router: appRouter,
     createContext,
+    onError: ({ error, path }) => {
+      console.error('[backend] tRPC error on path:', path);
+      console.error('[backend] tRPC error:', error);
+    },
   })
 );
+
+// Add middleware to log all requests
+app.use('*', async (c, next) => {
+  console.log('[backend] Request:', c.req.method, c.req.url);
+  const headers = c.req.header();
+  console.log('[backend] Headers:', headers);
+  await next();
+  console.log('[backend] Response status:', c.res.status);
+});
 
 // Simple health check endpoint
 app.get("/", (c) => {

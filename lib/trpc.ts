@@ -2,7 +2,7 @@ import { createTRPCReact } from "@trpc/react-query";
 import { createTRPCClient, httpLink } from "@trpc/client";
 import type { AppRouter } from "@/backend/trpc/app-router";
 import superjson from "superjson";
-import { getAuthToken } from "./authToken";
+import { getAuthToken } from "@/lib/authToken";
 
 export const trpc = createTRPCReact<AppRouter>();
 
@@ -33,6 +33,25 @@ export const trpcClient = createTRPCClient<AppRouter>({
         const token = getAuthToken();
         console.log('[trpc] Request headers - token present:', !!token);
         return token ? { authorization: `Bearer ${token}` } : {};
+      },
+      fetch(url, options) {
+        console.log('[trpc] Making request to:', url);
+        console.log('[trpc] Request options:', {
+          method: options?.method,
+          headers: options?.headers,
+          body: options?.body ? 'present' : 'none'
+        });
+        return fetch(url, options).then(response => {
+          console.log('[trpc] Response status:', response.status);
+          console.log('[trpc] Response ok:', response.ok);
+          if (!response.ok) {
+            console.error('[trpc] Response not ok:', response.status, response.statusText);
+          }
+          return response;
+        }).catch(error => {
+          console.error('[trpc] Fetch error:', error);
+          throw error;
+        });
       },
     }),
   ],

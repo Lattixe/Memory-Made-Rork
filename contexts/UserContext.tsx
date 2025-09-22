@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { setAuthToken } from '../lib/authToken';
+import { setAuthToken, clearAuthToken } from '@/lib/authToken';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import { safeJsonParse } from '@/utils/json';
@@ -57,7 +57,7 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
         const userResult = safeJsonParse<User>(userData);
         if (userResult.success && userResult.data && userResult.data.id) {
           setUser(userResult.data);
-          setAuthToken(userResult.data.token);
+          await setAuthToken(userResult.data.token);
         } else {
           console.warn('Invalid user data format, clearing storage:', userResult.error);
           await AsyncStorage.removeItem(USER_STORAGE_KEY);
@@ -88,7 +88,9 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
   const login = useCallback(async (email: string, password: string) => {
     try {
       console.log('[auth] Attempting login for:', email);
+      console.log('[auth] Making tRPC request to auth.login...');
       const result = await trpcClient.auth.login.mutate({ email, password });
+      console.log('[auth] tRPC request successful');
       console.log('[auth] Login successful:', { id: result.id, email: result.email, name: result.name });
       
       const authed: User = { 
@@ -98,11 +100,20 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
         token: result.token 
       };
       
+      console.log('[auth] Saving user data to AsyncStorage...');
       await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authed));
+      console.log('[auth] Setting user state...');
       setUser(authed);
-      setAuthToken(result.token);
+      console.log('[auth] Setting auth token...');
+      await setAuthToken(result.token);
+      console.log('[auth] Login process completed successfully');
     } catch (error: any) {
-      console.error('Error logging in:', error);
+      console.error('[auth] Error logging in:', error);
+      console.error('[auth] Error details:', {
+        message: error?.message,
+        cause: error?.cause,
+        stack: error?.stack?.substring(0, 500)
+      });
       
       // Enhanced error handling
       if (error?.message?.includes('404')) {
@@ -120,7 +131,9 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
   const signup = useCallback(async (email: string, password: string, name?: string) => {
     try {
       console.log('[auth] Attempting signup for:', email);
+      console.log('[auth] Making tRPC request to auth.signup...');
       const result = await trpcClient.auth.signup.mutate({ email, password, name });
+      console.log('[auth] tRPC request successful');
       console.log('[auth] Signup successful:', { id: result.id, email: result.email, name: result.name });
       
       const authed: User = { 
@@ -130,11 +143,20 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
         token: result.token 
       };
       
+      console.log('[auth] Saving user data to AsyncStorage...');
       await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authed));
+      console.log('[auth] Setting user state...');
       setUser(authed);
-      setAuthToken(result.token);
+      console.log('[auth] Setting auth token...');
+      await setAuthToken(result.token);
+      console.log('[auth] Signup process completed successfully');
     } catch (error: any) {
-      console.error('Error signing up:', error);
+      console.error('[auth] Error signing up:', error);
+      console.error('[auth] Error details:', {
+        message: error?.message,
+        cause: error?.cause,
+        stack: error?.stack?.substring(0, 500)
+      });
       
       // Enhanced error handling
       if (error?.message?.includes('404')) {
@@ -153,7 +175,7 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
     try {
       await AsyncStorage.multiRemove([USER_STORAGE_KEY, STICKERS_STORAGE_KEY]);
       setUser(null);
-      setAuthToken(undefined);
+      await clearAuthToken();
       setSavedStickers([]);
       await AsyncStorage.removeItem(USER_STORAGE_KEY);
     } catch (error) {
