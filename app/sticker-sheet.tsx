@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, memo } from 'react';
+import React, { useState, useRef, useCallback, memo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -116,13 +116,12 @@ const StickerSheetScreen = memo(() => {
   const initializeAnimatedValues = useCallback((stickerId: string, x?: number, y?: number) => {
     if (!animatedValues.current[stickerId]) {
       animatedValues.current[stickerId] = {
-        pan: new Animated.ValueXY({ x: x || 0, y: y || 0 }),
+        pan: new Animated.ValueXY({ x: x ?? 0, y: y ?? 0 }),
         scale: new Animated.Value(1),
         opacity: new Animated.Value(1),
         borderColor: new Animated.Value(0),
       };
     } else if (x !== undefined && y !== undefined) {
-      // Update position if provided
       animatedValues.current[stickerId].pan.setValue({ x, y });
     }
   }, []);
@@ -881,6 +880,15 @@ const StickerSheetScreen = memo(() => {
     }
   }, [selectedStickers, validationErrors, arrangeStickersNeatly, generateStickerSheetImage]);
 
+  useEffect(() => {
+    selectedStickers.forEach((item) => {
+      initializeAnimatedValues(item.id, item.x, item.y);
+      if (!panResponders.current[item.id]) {
+        panResponders.current[item.id] = createPanResponder(item.id, item.x, item.y);
+      }
+    });
+  }, [selectedStickers, initializeAnimatedValues, createPanResponder]);
+
   if (savedStickers.length === 0) {
     return (
       <View style={styles.container}>
@@ -943,34 +951,30 @@ const StickerSheetScreen = memo(() => {
                 ref={canvasRef}
                 style={[styles.canvas, { height: CANVAS_HEIGHT }]}
                 collapsable={false}
+                testID="stickerSheetCanvas"
               >
                 {selectedStickers.map((item) => {
-                  // Initialize animated values with current position only if not dragging
-                  if (draggedSticker !== item.id) {
-                    initializeAnimatedValues(item.id, item.x, item.y);
-                  }
-                  
-                  // Create pan responder with current position - recreate if position changed and not dragging
-                  if (!panResponders.current[item.id] && draggedSticker !== item.id) {
-                    panResponders.current[item.id] = createPanResponder(item.id, item.x, item.y);
-                  }
+                  const anim = animatedValues.current[item.id];
                   const panResponder = panResponders.current[item.id];
-                  
-                  const borderColorInterpolation = animatedValues.current[item.id].borderColor.interpolate({
+
+                  if (!anim) {
+                    return null;
+                  }
+
+                  const borderColorInterpolation = anim.borderColor.interpolate({
                     inputRange: [0, 1],
                     outputRange: [neutralColors.white, neutralColors.error],
                   });
                   
-                  // Use absolute positioning with animated values
                   const animatedStyle = {
-                    left: animatedValues.current[item.id].pan.x,
-                    top: animatedValues.current[item.id].pan.y,
+                    left: anim.pan.x,
+                    top: anim.pan.y,
                     transform: [
-                      { scale: animatedValues.current[item.id].scale },
+                      { scale: anim.scale },
                       { rotate: `${item.rotation}deg` },
                     ],
-                    opacity: animatedValues.current[item.id].opacity,
-                  };
+                    opacity: anim.opacity,
+                  } as const;
 
                   return (
                     <Animated.View
@@ -983,8 +987,9 @@ const StickerSheetScreen = memo(() => {
                         },
                         animatedStyle,
                       ]}
-                      {...panResponder.panHandlers}
+                      {...(panResponder ? panResponder.panHandlers : {})}
                       pointerEvents="box-only"
+                      testID={`sticker-${item.id}`}
                     >
                       {/* Kiss-cut sticker with bleed area */}
                       <Animated.View style={[
@@ -1028,12 +1033,14 @@ const StickerSheetScreen = memo(() => {
                     <TouchableOpacity
                       style={styles.floatingButton}
                       onPress={() => rotateSticker(draggedSticker)}
+                      testID="rotateStickerButton"
                     >
                       <RotateCcw size={18} color={neutralColors.white} />
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.floatingButton, styles.floatingButtonDanger]}
                       onPress={() => removeStickerFromSheet(draggedSticker)}
+                      testID="removeStickerButton"
                     >
                       <Trash2 size={18} color={neutralColors.white} />
                     </TouchableOpacity>
@@ -1074,6 +1081,7 @@ const StickerSheetScreen = memo(() => {
                   <TouchableOpacity
                     style={styles.arrangeButton}
                     onPress={arrangeStickersNeatly}
+                    testID="autoArrangeButton"
                   >
                     <Grid3X3 size={16} color={neutralColors.primary} />
                     <Text style={styles.arrangeButtonText}>Auto Arrange</Text>
@@ -1107,6 +1115,7 @@ const StickerSheetScreen = memo(() => {
                       ]}
                       onPress={() => addStickerToSheet(sticker)}
                       activeOpacity={0.7}
+                      testID={`addSticker-${sticker.id}`}
                     >
                       <View style={[
                         styles.libraryStickerOutline,
@@ -1147,22 +1156,23 @@ const StickerSheetScreen = memo(() => {
               style={[styles.checkoutButton, (isProcessing || isGeneratingSheet) && styles.buttonDisabled]}
               onPress={proceedToCheckout}
               disabled={isProcessing || isGeneratingSheet}
+              testID="checkoutButton"
             >
               {(isProcessing || isGeneratingSheet) ? (
-                <>
+                <View style={styles.checkoutButtonContent}>
                   <ActivityIndicator size="small" color={neutralColors.white} />
                   <Text style={styles.checkoutButtonText}>
                     {isGeneratingSheet ? 'Generating Sheet...' : 'Processing...'}
                   </Text>
-                </>
+                </View>
               ) : (
-                <>
+                <View style={styles.checkoutButtonContent}>
                   <ShoppingCart size={20} color={neutralColors.white} />
                   <Text style={styles.checkoutButtonText}>
                     Order {PRINTFUL_SHEET_CONFIG.CURRENT_SHEET.name} Sheet ($16.99)
                   </Text>
                   <Download size={16} color={neutralColors.white} />
-                </>
+                </View>
               )}
             </TouchableOpacity>
           </View>
@@ -1604,6 +1614,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+  },
+  checkoutButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
   checkoutButtonText: {
