@@ -351,11 +351,6 @@ const StickerSheetScreen = memo(() => {
         
         dragStartPosition.current = { x: currentX, y: currentY };
         
-        // Disable scrolling when dragging starts
-        if (scrollViewRef.current) {
-          scrollViewRef.current.setNativeProps({ scrollEnabled: false });
-        }
-        
         // Immediate UI feedback
         setDraggedSticker(stickerId);
         
@@ -413,11 +408,6 @@ const StickerSheetScreen = memo(() => {
       },
       onPanResponderRelease: (_, gestureState) => {
         setDraggedSticker(null);
-        
-        // Re-enable scrolling when dragging ends
-        if (scrollViewRef.current) {
-          scrollViewRef.current.setNativeProps({ scrollEnabled: true });
-        }
         
         // Calculate final position accounting for touch offset
         const touchOffsetX = initialTouchX - (STICKER_SIZE_PIXELS / 2);
