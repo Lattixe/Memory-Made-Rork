@@ -182,7 +182,7 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
       </View>
       
       <View style={styles.gridContainer}>
-        <>{stickersGrid}</>
+        {stickersGrid}
       </View>
 
       <ImageGalleryModal

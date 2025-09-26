@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Image,
@@ -6,91 +6,120 @@ import {
   TouchableOpacity,
   StyleSheet,
   useWindowDimensions,
+  Platform,
 } from 'react-native';
 
 interface ZoomableImageProps {
   source: { uri: string };
-  style?: any;
+  style?: object;
   onPress?: () => void;
   maxZoom?: number;
   minZoom?: number;
+  testID?: string;
 }
 
-export default function ZoomableImage({ 
-  source, 
-  style, 
-  onPress, 
-  maxZoom = 4, 
-  minZoom = 1 
+export default function ZoomableImage({
+  source,
+  style,
+  onPress,
+  maxZoom = 4,
+  minZoom = 1,
+  testID,
 }: ZoomableImageProps) {
   const { width: screenWidth } = useWindowDimensions();
-  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
-  const containerWidth = screenWidth - 96; // Account for padding
-  const containerHeight = 350; // Fixed height for sticker preview
+  const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
 
-  const handleSingleTap = () => {
-    if (onPress) {
-      onPress();
-    }
-  };
+  const containerWidth = useMemo(() => Math.max(0, screenWidth - 96), [screenWidth]);
+  const containerHeight = 350;
 
-  const handleImageLoad = (event: any) => {
-    const { width, height } = event.nativeEvent.source;
-    
-    // Calculate the best fit size while maintaining aspect ratio
-    const aspectRatio = width / height;
-    let finalWidth = containerWidth;
-    let finalHeight = containerWidth / aspectRatio;
-    
-    // If height exceeds container, scale based on height instead
-    if (finalHeight > containerHeight) {
-      finalHeight = containerHeight;
-      finalWidth = containerHeight * aspectRatio;
+  const handleSingleTap = useCallback(() => {
+    if (onPress) onPress();
+  }, [onPress]);
+
+  const computeFitSize = useCallback(
+    (naturalWidth: number, naturalHeight: number) => {
+      const aspectRatio = naturalWidth / naturalHeight;
+      let finalWidth = containerWidth;
+      let finalHeight = containerWidth / aspectRatio;
+
+      if (finalHeight > containerHeight) {
+        finalHeight = containerHeight;
+        finalWidth = containerHeight * aspectRatio;
+      }
+
+      const scale = Math.max(
+        0.8,
+        Math.min(finalWidth / containerWidth, finalHeight / containerHeight),
+      );
+      return { width: finalWidth * scale, height: finalHeight * scale };
+    },
+    [containerWidth],
+  );
+
+  const handleImageLoad = useCallback(() => {
+    const uri = source?.uri ?? '';
+    if (!uri) {
+      console.warn('ZoomableImage: source.uri is empty');
+      setImageSize({ width: containerWidth * 0.8, height: containerHeight * 0.8 });
+      return;
     }
-    
-    // Ensure minimum size for visibility
-    const scale = Math.max(0.8, Math.min(finalWidth / containerWidth, finalHeight / containerHeight));
-    finalWidth = finalWidth * scale;
-    finalHeight = finalHeight * scale;
-    
-    setImageSize({ width: finalWidth, height: finalHeight });
-  };
+
+    Image.getSize(
+      uri,
+      (w: number, h: number) => {
+        const fitted = computeFitSize(w, h);
+        setImageSize(fitted);
+      },
+      (err: unknown) => {
+        console.error('ZoomableImage: failed to get image size', err);
+        setImageSize({ width: containerWidth * 0.8, height: containerHeight * 0.8 });
+      },
+    );
+  }, [source?.uri, containerWidth, computeFitSize]);
+
+  const scrollContentStyle = useMemo(
+    () => [
+      styles.scrollContent,
+      { minHeight: containerHeight },
+    ],
+    [containerHeight],
+  );
 
   return (
-    <View style={[styles.container, style]}>
+    <View style={[styles.container, style]} testID={testID ?? 'zoomable-image-container'}>
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={scrollContentStyle}
         maximumZoomScale={maxZoom}
         minimumZoomScale={minZoom}
-        zoomScale={minZoom}
-        bouncesZoom={true}
+        bouncesZoom
         showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
-        centerContent={true}
-        pinchGestureEnabled={true}
-        scrollEnabled={true}
+        pinchGestureEnabled={Platform.OS !== 'web'}
+        scrollEnabled
         directionalLockEnabled={false}
+        testID="zoomable-image-scroll"
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           activeOpacity={1}
           onPress={handleSingleTap}
           style={styles.imageContainer}
+          testID="zoomable-image-touchable"
         >
-          <Image 
-            source={source} 
+          <Image
+            source={source}
             style={[
-              styles.image,
-              imageSize.width > 0 && imageSize.height > 0 ? {
-                width: imageSize.width,
-                height: imageSize.height,
-              } : {
-                width: containerWidth * 0.8,
-                height: containerHeight * 0.8,
-              }
+              imageSize
+                ? { width: imageSize.width, height: imageSize.height }
+                : { width: containerWidth * 0.8, height: containerHeight * 0.8 },
             ]}
             resizeMode="contain"
             onLoad={handleImageLoad}
+            onError={() => {
+              console.error('ZoomableImage: image failed to load');
+              setImageSize({ width: containerWidth * 0.8, height: containerHeight * 0.8 });
+            }}
+            testID="zoomable-image-img"
           />
         </TouchableOpacity>
       </ScrollView>
@@ -107,17 +136,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    minHeight: '100%',
   },
   imageContainer: {
     justifyContent: 'center',
     alignItems: 'center',
     flex: 1,
-  },
-  image: {
-    // Dynamic sizing handled in component
   },
 });
