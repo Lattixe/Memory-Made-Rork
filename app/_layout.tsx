@@ -27,7 +27,7 @@ const RootLayoutNav = React.memo(() => {
       <Stack.Screen name="review" options={{ title: "Review Stickers", headerBackTitle: "Back" }} />
       <Stack.Screen name="checkout" options={{ title: "Checkout", headerBackTitle: "Back" }} />
       <Stack.Screen name="admin" options={{ title: "Admin Settings", headerBackTitle: "Back" }} />
-      <Stack.Screen name="edit" options={{ title: "Edit Sticker", headerBackTitle: "Back" }} />
+      <Stack.Screen name="edit" options={{ headerShown: false }} />
       <Stack.Screen name="sticker-sheet" options={{ title: "Sticker Sheet", headerBackTitle: "Back" }} />
     </Stack>
   );
