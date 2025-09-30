@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, Fragment } from 'react';
 import {
   View,
   Text,
@@ -138,7 +138,7 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
               </View>
             </View>
           ))}
-          {rowItems.length === 1 && <View style={styles.emptyPlaceholder} />}
+          {rowItems.length === 1 ? <View style={styles.emptyPlaceholder} /> : null}
         </View>
       );
     }
@@ -182,7 +182,7 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
       </View>
       
       <View style={styles.gridContainer}>
-        {stickersGrid}
+        <Fragment>{stickersGrid}</Fragment>
       </View>
 
       <ImageGalleryModal
@@ -230,6 +230,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   row: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 16,
   },
