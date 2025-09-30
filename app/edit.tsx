@@ -10,19 +10,18 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   Keyboard,
   TouchableWithoutFeedback,
   Dimensions,
   FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Save, Sparkles, RotateCcw, ChevronLeft, ChevronRight, Palette, Droplets, Clock, Heart, Flower2, Shapes, Camera, PenTool, Leaf } from 'lucide-react-native';
+import { ArrowLeft, Save, Sparkles, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { neutralColors } from '@/constants/colors';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useUser } from '@/contexts/UserContext';
 import { safeJsonParse } from '@/utils/json';
-import { compressBase64Image, needsCompression, estimateBase64Size } from '@/utils/imageCompression';
+import { compressBase64Image, estimateBase64Size } from '@/utils/imageCompression';
 import { processStickerImage } from '@/utils/backgroundRemover';
 
 type ImageEditRequest = {
@@ -41,88 +40,7 @@ type StickerVersion = {
   isOriginal?: boolean;
 };
 
-type StylePreset = {
-  id: string;
-  name: string;
-  icon: React.ComponentType<{ size: number; color: string }>;
-  prompt: string;
-  color: string;
-};
-
 const { width: screenWidth } = Dimensions.get('window');
-
-const STYLE_PRESETS: StylePreset[] = [
-  {
-    id: 'watercolor',
-    name: 'Watercolor',
-    icon: Droplets,
-    prompt: 'Transform into soft watercolor style with blended pastel colors, gentle brush strokes, and artistic paint effects. Add subtle color bleeding and organic edges typical of watercolor paintings.',
-    color: '#87CEEB',
-  },
-  {
-    id: 'minimalist',
-    name: 'Minimalist',
-    icon: Shapes,
-    prompt: 'Simplify to clean minimalist design with simple lines, reduced details, subtle monochrome or limited color palette, and plenty of negative space. Focus on essential elements only.',
-    color: '#2C3E50',
-  },
-  {
-    id: 'vintage',
-    name: 'Vintage',
-    icon: Clock,
-    prompt: 'Apply vintage/retro aesthetic with muted sepia tones, aged texture overlay, nostalgic elements, and classic typography. Add subtle grain and faded edges for authentic vintage feel.',
-    color: '#8B7355',
-  },
-  {
-    id: 'kawaii',
-    name: 'Kawaii',
-    icon: Heart,
-    prompt: 'Make super cute kawaii/chibi style with big sparkly eyes, soft pastel colors (pink, lavender, mint), rounded features, and adorable expressions. Add cute blush marks and sparkles.',
-    color: '#FFB6C1',
-  },
-  {
-    id: 'boho',
-    name: 'Boho',
-    icon: Leaf,
-    prompt: 'Transform to bohemian style with earthy warm tones (terracotta, sage, mustard), natural textures, organic patterns, and free-spirited artistic elements. Add subtle mandala or feather details.',
-    color: '#CD853F',
-  },
-  {
-    id: 'floral',
-    name: 'Floral',
-    icon: Flower2,
-    prompt: 'Add beautiful floral elements with detailed flower illustrations, botanical leaves, vines, and nature-inspired decorations. Use soft romantic colors and delicate petals.',
-    color: '#FF69B4',
-  },
-  {
-    id: 'geometric',
-    name: 'Geometric',
-    icon: Shapes,
-    prompt: 'Apply modern geometric style with bold shapes, clean lines, abstract patterns, and contemporary color blocking. Use triangles, circles, and angular designs with precise edges.',
-    color: '#4A90E2',
-  },
-  {
-    id: 'aesthetic',
-    name: 'Aesthetic',
-    icon: Camera,
-    prompt: 'Create trendy aesthetic/Instagram style with dreamy pastel gradient colors, soft glow effects, and cohesive millennial pink/lavender/mint palette. Add subtle sparkles and dreamy atmosphere.',
-    color: '#E6B8D8',
-  },
-  {
-    id: 'sketch',
-    name: 'Hand-drawn',
-    icon: PenTool,
-    prompt: 'Convert to hand-drawn sketch style with visible pencil strokes, crosshatching, doodle-like quality, and artistic imperfections. Keep it charming and personal with sketch lines.',
-    color: '#696969',
-  },
-  {
-    id: 'botanical',
-    name: 'Botanical',
-    icon: Leaf,
-    prompt: 'Transform to vintage botanical illustration style with detailed scientific accuracy, fine line work, muted natural colors, and classic botanical art aesthetics with Latin labels.',
-    color: '#556B2F',
-  },
-];
 
 const EditScreen = () => {
   const { originalImage, stickerImage, stickerId } = useLocalSearchParams<{
@@ -134,12 +52,8 @@ const EditScreen = () => {
   const [editPrompt, setEditPrompt] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [currentVersionIndex, setCurrentVersionIndex] = useState<number>(0);
-  const [showPresets, setShowPresets] = useState<boolean>(true); // Show presets by default
-  const [showTextInput, setShowTextInput] = useState<boolean>(false); // Hide text input by default
   const textInputRef = useRef<TextInput>(null);
   const flatListRef = useRef<FlatList>(null);
-  const presetsScrollRef = useRef<ScrollView>(null);
-  const handleEditStickerRef = useRef<(customPrompt?: string) => Promise<void>>((customPrompt?: string) => Promise.resolve());
   
   // Initialize with data immediately if available for instant rendering
   const [versions, setVersions] = useState<StickerVersion[]>(() => {
@@ -384,10 +298,9 @@ const EditScreen = () => {
 
 
   const processEditWithRetry = React.useCallback(async (base64Data: string, promptToUse: string, retryCount: number = 0): Promise<ImageEditResponse> => {
-    const maxRetries = 0; // No retries - fail fast
-    const timeout = 4000; // 4 seconds timeout
+    const maxRetries = 0;
+    const timeout = 4000;
     
-    // First apply the edit with the user's prompt
     const requestBody: ImageEditRequest = {
       prompt: promptToUse + " Keep the sticker style clean and suitable for die-cut printing.",
       images: [{ type: 'image', image: base64Data }],
@@ -503,38 +416,11 @@ const EditScreen = () => {
     }
   }, [createLocalFallbackEdit]);
 
-  const handleApplyPreset = React.useCallback((preset: StylePreset) => {
-    // Dismiss keyboard when applying preset
-    Keyboard.dismiss();
-    
-    // Check if we have a sticker image to edit
-    if (versions.length === 0 || !versions[currentVersionIndex]?.image) {
-      Alert.alert('Error', 'No sticker image available to edit. Please wait for the sticker to load.');
-      return;
-    }
-    
-    // Validate image URI before processing
-    const currentImage = versions[currentVersionIndex].image;
-    if (!currentImage || currentImage.trim() === '') {
-      Alert.alert('Error', 'Invalid sticker image. Please try again.');
-      return;
-    }
-    
-    console.log(`Applying ${preset.name} style preset...`);
-    setEditPrompt(preset.prompt);
-    setShowPresets(false);
-    
-    // Trigger edit with the preset prompt after state update
-    setTimeout(() => {
-      handleEditStickerRef.current(preset.prompt);
-    }, 0);
-  }, [versions, currentVersionIndex]);
-
-  const handleEditSticker = React.useCallback(async (customPrompt?: string) => {
-    const promptToUse = customPrompt || editPrompt;
+  const handleEditSticker = React.useCallback(async () => {
+    const promptToUse = editPrompt;
     
     if (!promptToUse.trim()) {
-      Alert.alert('Edit Request Required', 'Please describe what changes you\'d like to make to the sticker or select a style preset.');
+      Alert.alert('Edit Request Required', 'Please describe what changes you\'d like to make to the sticker.');
       return;
     }
 
@@ -606,11 +492,6 @@ const EditScreen = () => {
       setIsProcessing(false);
     }
   }, [editPrompt, convertImageToBase64, processEditWithRetry, versions]);
-  
-  // Update the ref whenever handleEditSticker changes
-  React.useEffect(() => {
-    handleEditStickerRef.current = handleEditSticker;
-  }, [handleEditSticker]);
 
   const handleSaveAndPurchase = React.useCallback(async () => {
     const currentVersion = versions[currentVersionIndex];
@@ -827,122 +708,40 @@ const EditScreen = () => {
 
           {/* Edit Tools Section */}
           <View style={styles.editToolsContainer}>
-            {/* Style Presets */}
-            {showPresets && (
-              <View style={styles.presetsSection}>
-                <ScrollView
-                  ref={presetsScrollRef}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.presetsScroll}
-                  contentContainerStyle={styles.presetsContent}
-                >
-                  {STYLE_PRESETS.map((preset) => {
-                    const Icon = preset.icon;
-                    return (
-                      <TouchableOpacity
-                        key={preset.id}
-                        style={[
-                          styles.presetCard,
-                          { borderColor: preset.color },
-                          (isProcessing || versions.length === 0) && styles.presetCardDisabled
-                        ]}
-                        onPress={() => handleApplyPreset(preset)}
-                        disabled={isProcessing || versions.length === 0}
-                      >
-                        <View 
-                          style={[
-                            styles.presetIconContainer,
-                            { backgroundColor: `${preset.color}20` }
-                          ]}
-                        >
-                          <Icon size={20} color={preset.color} />
-                        </View>
-                        <Text style={styles.presetName}>{preset.name}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
+            <KeyboardAvoidingView 
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 60}
+            >
+              <View style={styles.promptContainer}>
+                <TextInput
+                  ref={textInputRef}
+                  style={styles.promptInput}
+                  value={editPrompt}
+                  onChangeText={setEditPrompt}
+                  placeholder="Describe your changes (e.g., make it watercolor style, add flowers, make it minimalist)..."
+                  placeholderTextColor={neutralColors.text.secondary}
+                  multiline
+                  textAlignVertical="top"
+                  editable={!isProcessing}
+                  returnKeyType="done"
+                  blurOnSubmit={true}
+                  onSubmitEditing={Keyboard.dismiss}
+                  selectionColor={neutralColors.primary}
+                  underlineColorAndroid="transparent"
+                  autoCorrect={true}
+                  spellCheck={true}
+                />
               </View>
-            )}
+            </KeyboardAvoidingView>
 
-            {/* Custom Text Input */}
-            {showTextInput && (
-              <KeyboardAvoidingView 
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 60}
-              >
-                <View style={styles.promptContainer}>
-                  <TextInput
-                    ref={textInputRef}
-                    style={styles.promptInput}
-                    value={editPrompt}
-                    onChangeText={setEditPrompt}
-                    placeholder="Describe your changes..."
-                    placeholderTextColor={neutralColors.text.secondary}
-                    multiline
-                    textAlignVertical="top"
-                    editable={!isProcessing}
-                    returnKeyType="done"
-                    blurOnSubmit={true}
-                    onSubmitEditing={Keyboard.dismiss}
-                    selectionColor={neutralColors.primary}
-                    underlineColorAndroid="transparent"
-                    autoCorrect={false}
-                    spellCheck={false}
-                  />
-                </View>
-              </KeyboardAvoidingView>
-            )}
-
-            {/* Action Buttons */}
             <View style={styles.buttonContainer}>
-              <View style={styles.toolButtons}>
-                <TouchableOpacity
-                  style={[
-                    styles.toolButton,
-                    showPresets && styles.toolButtonActive
-                  ]}
-                  onPress={() => {
-                    setShowPresets(!showPresets);
-                    setShowTextInput(false);
-                    if (showTextInput) {
-                      Keyboard.dismiss();
-                    }
-                  }}
-                >
-                  <Palette size={20} color={showPresets ? neutralColors.white : neutralColors.primary} />
-                  <Text style={[styles.toolButtonText, showPresets && styles.toolButtonTextActive]}>Styles</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[
-                    styles.toolButton,
-                    showTextInput && styles.toolButtonActive
-                  ]}
-                  onPress={() => {
-                    setShowTextInput(!showTextInput);
-                    setShowPresets(false);
-                    if (!showTextInput) {
-                      setTimeout(() => textInputRef.current?.focus(), 100);
-                    } else {
-                      Keyboard.dismiss();
-                    }
-                  }}
-                >
-                  <PenTool size={20} color={showTextInput ? neutralColors.white : neutralColors.primary} />
-                  <Text style={[styles.toolButtonText, showTextInput && styles.toolButtonTextActive]}>Custom</Text>
-                </TouchableOpacity>
-              </View>
-              
               <TouchableOpacity
                 style={[
                   styles.editButton,
-                  isProcessing && styles.editButtonDisabled,
-                  (!editPrompt.trim() && !showPresets) && styles.editButtonDisabled,
+                  (isProcessing || !editPrompt.trim()) && styles.editButtonDisabled,
                 ]}
-                onPress={() => handleEditSticker()}
-                disabled={isProcessing || (!editPrompt.trim() && !showPresets)}
+                onPress={handleEditSticker}
+                disabled={isProcessing || !editPrompt.trim()}
                 activeOpacity={0.8}
               >
                 {isProcessing ? (
@@ -1216,74 +1015,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600' as const,
   },
-  presetsSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  presetHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  presetTitle: {
-    fontSize: 16,
-    fontWeight: '600' as const,
-    color: neutralColors.text.primary,
-  },
-  presetToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: neutralColors.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: neutralColors.border,
-  },
-  presetToggleText: {
-    fontSize: 13,
-    fontWeight: '500' as const,
-    color: neutralColors.primary,
-  },
-  presetsScroll: {
-    flexGrow: 0,
-  },
-  presetsContent: {
-    paddingRight: 20,
-    gap: 10,
-  },
-  presetCard: {
-    backgroundColor: neutralColors.white,
-    borderRadius: 12,
-    padding: 10,
-    alignItems: 'center',
-    minWidth: 80,
-    borderWidth: 2,
-    shadowColor: neutralColors.gray900,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  presetIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  presetName: {
-    fontSize: 11,
-    fontWeight: '600' as const,
-    color: neutralColors.text.primary,
-    textAlign: 'center',
-  },
-  presetCardDisabled: {
-    opacity: 0.5,
-  },
+
   loadingContainer: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -1313,35 +1045,5 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
-  toolButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 20,
-    marginBottom: 12,
-  },
-  toolButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: neutralColors.surface,
-    borderWidth: 1,
-    borderColor: neutralColors.border,
-  },
-  toolButtonActive: {
-    backgroundColor: neutralColors.primary,
-    borderColor: neutralColors.primary,
-  },
-  toolButtonText: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: neutralColors.primary,
-  },
-  toolButtonTextActive: {
-    color: neutralColors.white,
-  },
+
 });
