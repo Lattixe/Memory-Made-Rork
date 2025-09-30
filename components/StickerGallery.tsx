@@ -175,7 +175,7 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
           <View style={styles.headerTextContainer}>
             <Text style={styles.title}>Your Memories</Text>
             <Text style={styles.subtitle}>
-              {stickers.length} saved memory sticker{stickers.length !== 1 ? 's' : ''}
+              {`${stickers.length} saved memory sticker${stickers.length !== 1 ? 's' : ''}`}
             </Text>
           </View>
         </View>
