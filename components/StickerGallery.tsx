@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, Fragment } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -76,74 +76,69 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
     });
   }, []);
 
-  // Memoize the stickers grid to prevent unnecessary re-renders
-  const stickersGrid = useMemo(() => {
+  const renderStickerCard = useCallback((item: SavedSticker) => (
+    <View key={item.id} style={styles.stickerCard}>
+      <TouchableOpacity
+        style={styles.stickerImageContainer}
+        onPress={() => {
+          const index = stickers.findIndex(s => s.id === item.id);
+          setSelectedImageIndex(index);
+          setGalleryVisible(true);
+        }}
+        activeOpacity={0.9}
+      >
+        <ZoomableImage 
+          source={{ uri: item.stickerImage }} 
+          style={styles.stickerImage}
+          maxZoom={3}
+          minZoom={1}
+        />
+      </TouchableOpacity>
+      
+      <View style={styles.stickerInfo}>
+        <View style={styles.dateContainer}>
+          <Calendar size={14} color={neutralColors.text.secondary} />
+          <Text style={styles.dateText}>{formatDate(item.createdAt)}</Text>
+        </View>
+        
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={styles.reorderButton}
+            onPress={() => handleReorderSticker(item)}
+            activeOpacity={0.7}
+          >
+            <ShoppingCart size={16} color={neutralColors.primary} />
+            <Text style={styles.reorderButtonText}>Reorder</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => handleEditSticker(item)}
+            activeOpacity={0.7}
+          >
+            <Edit3 size={16} color={neutralColors.white} />
+            <Text style={styles.editButtonText}>Edit</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => handleDeleteSticker(item)}
+            activeOpacity={0.7}
+          >
+            <Trash2 size={16} color={neutralColors.error} />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  ), [stickers, formatDate, handleDeleteSticker, handleReorderSticker, handleEditSticker]);
+
+  const stickerRows = useMemo(() => {
     const rows = [];
     for (let i = 0; i < stickers.length; i += 2) {
-      const rowItems = stickers.slice(i, i + 2);
-      rows.push(
-        <View key={i} style={styles.row}>
-          {rowItems.map((item) => (
-            <View key={item.id} style={styles.stickerCard}>
-              <TouchableOpacity
-                style={styles.stickerImageContainer}
-                onPress={() => {
-                  const index = stickers.findIndex(s => s.id === item.id);
-                  setSelectedImageIndex(index);
-                  setGalleryVisible(true);
-                }}
-                activeOpacity={0.9}
-              >
-                <ZoomableImage 
-                  source={{ uri: item.stickerImage }} 
-                  style={styles.stickerImage}
-                  maxZoom={3}
-                  minZoom={1}
-                />
-              </TouchableOpacity>
-              
-              <View style={styles.stickerInfo}>
-                <View style={styles.dateContainer}>
-                  <Calendar size={14} color={neutralColors.text.secondary} />
-                  <Text style={styles.dateText}>{formatDate(item.createdAt)}</Text>
-                </View>
-                
-                <View style={styles.actionButtons}>
-                  <TouchableOpacity
-                    style={styles.reorderButton}
-                    onPress={() => handleReorderSticker(item)}
-                    activeOpacity={0.7}
-                  >
-                    <ShoppingCart size={16} color={neutralColors.primary} />
-                    <Text style={styles.reorderButtonText}>Reorder</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity
-                    style={styles.editButton}
-                    onPress={() => handleEditSticker(item)}
-                    activeOpacity={0.7}
-                  >
-                    <Edit3 size={16} color={neutralColors.white} />
-                    <Text style={styles.editButtonText}>Edit</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => handleDeleteSticker(item)}
-                    activeOpacity={0.7}
-                  >
-                    <Trash2 size={16} color={neutralColors.error} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          ))}
-          {rowItems.length === 1 ? <View style={styles.emptyPlaceholder} /> : null}
-        </View>
-      );
+      rows.push(stickers.slice(i, i + 2));
     }
     return rows;
-  }, [stickers, formatDate, handleDeleteSticker, handleReorderSticker, handleEditSticker]);
+  }, [stickers]);
 
   if (stickers.length === 0) {
     return (
@@ -182,7 +177,12 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
       </View>
       
       <View style={styles.gridContainer}>
-        <Fragment>{stickersGrid}</Fragment>
+        {stickerRows.map((rowItems, rowIndex) => (
+          <View key={rowIndex} style={styles.row}>
+            {rowItems.map(renderStickerCard)}
+            {rowItems.length === 1 && <View style={styles.emptyPlaceholder} />}
+          </View>
+        ))}
       </View>
 
       <ImageGalleryModal
