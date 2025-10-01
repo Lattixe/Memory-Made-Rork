@@ -19,6 +19,7 @@ import { useUser } from '@/contexts/UserContext';
 import { printfulService } from '@/services/printful';
 import { PRINTFUL_PRODUCTS } from '@/constants/printful';
 import { stripeService } from '@/services/stripe';
+import StickerSheetPreview from '@/components/StickerSheetPreview';
 
 type OrderSummary = {
   stickerPack: number;
@@ -42,7 +43,9 @@ export default function CheckoutScreen() {
     isReorder, 
     isStickerSheet, 
     stickerCount: stickerCountParam,
-    originalImage: directOriginalImage
+    originalImage: directOriginalImage,
+    sheetSize: sheetSizeParam,
+    isMultiStickerSheet,
   } = params as {
     stickerId?: string;
     originalImage?: string;
@@ -50,17 +53,19 @@ export default function CheckoutScreen() {
     isReorder?: string;
     isStickerSheet?: string;
     stickerCount?: string;
+    sheetSize?: string;
+    isMultiStickerSheet?: string;
   };
   
   const isReorderFlow = isReorder === 'true';
-  const isStickerSheetFlow = isStickerSheet === 'true';
+  const isStickerSheetFlow = isStickerSheet === 'true' || isMultiStickerSheet === 'true';
+  const sheetSize = (sheetSizeParam || '4x4') as '3x3' | '4x4' | '5.5x5.5';
   
   // Get sticker count from params for sticker sheets
   const stickerCount = isStickerSheetFlow ? parseInt(stickerCountParam || '1', 10) : 1;
   
   // State for loaded sticker data - initialize immediately if available
   const [finalStickers, setFinalStickers] = useState<string>(directFinalStickers || '');
-  const [originalImage, setOriginalImage] = useState<string>(directOriginalImage || '');
   // Only show loading if we have a stickerId but no direct data
   const [isLoadingSticker, setIsLoadingSticker] = useState<boolean>(!!stickerId && !directFinalStickers);
 
@@ -106,7 +111,6 @@ export default function CheckoutScreen() {
           const sticker = await getStickerById(stickerId);
           if (sticker) {
             setFinalStickers(sticker.stickerImage);
-            setOriginalImage(sticker.originalImage);
           } else {
             Alert.alert('Error', 'Sticker not found');
             router.back();
@@ -138,14 +142,14 @@ export default function CheckoutScreen() {
 
   const calculatedOrderSummary = useMemo(() => {
     if (isStickerSheetFlow) {
-      // Sticker sheet pricing: $2.99 per sticker
-      const stickerSheetPrice = stickerCount * 2.99;
-      const tax = stickerSheetPrice * 0.08; // 8% tax
+      const variant = PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.variants[sheetSize as keyof typeof PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.variants];
+      const sheetPrice = variant.price;
+      const tax = sheetPrice * 0.08;
       return {
-        stickerPack: stickerSheetPrice,
+        stickerPack: sheetPrice,
         shipping: 4.99,
         tax: tax,
-        total: stickerSheetPrice + 4.99 + tax,
+        total: sheetPrice + 4.99 + tax,
       };
     } else {
       const variant = PRINTFUL_PRODUCTS.INDIVIDUAL_KISS_CUT_STICKERS.variants[selectedVariant as keyof typeof PRINTFUL_PRODUCTS.INDIVIDUAL_KISS_CUT_STICKERS.variants];
@@ -156,7 +160,7 @@ export default function CheckoutScreen() {
         total: variant.price + 4.99 + 2.39,
       };
     }
-  }, [selectedVariant, isStickerSheetFlow, stickerCount]);
+  }, [selectedVariant, isStickerSheetFlow, sheetSize]);
 
   useEffect(() => {
     setOrderSummary(calculatedOrderSummary);
@@ -298,10 +302,10 @@ export default function CheckoutScreen() {
           zipCode: customerInfo.zipCode,
         },
         stickerImageUrl: uploadResult.url,
-        selectedVariant: isStickerSheetFlow ? 'sticker-sheet' : selectedVariant,
+        selectedVariant: isStickerSheetFlow ? sheetSize : selectedVariant,
         quantity: 1,
         isStickerSheet: isStickerSheetFlow,
-        stickerCount: isStickerSheetFlow ? stickerCount : undefined,
+        sheetSize: isStickerSheetFlow ? sheetSize : undefined,
       });
 
       console.log('Order created successfully:', orderResult);
@@ -358,7 +362,7 @@ export default function CheckoutScreen() {
         ]
       );
     }
-  }, [validateForm, finalStickers, paymentMethod, processStripePayment, customerInfo, selectedVariant, isReorderFlow, isStickerSheetFlow, stickerCount]);
+  }, [validateForm, finalStickers, paymentMethod, processStripePayment, customerInfo, selectedVariant, isReorderFlow, isStickerSheetFlow, sheetSize]);
 
   // Show loading state while loading sticker data
   if (isLoadingSticker) {
@@ -403,18 +407,11 @@ export default function CheckoutScreen() {
               </View>
               {isStickerSheetFlow ? (
                 <View style={styles.stickerSheetPreview}>
-                  <Text style={styles.stickerSheetTitle}>
-                    Custom Sticker Sheet ({stickerCount} stickers)
-                  </Text>
-                  <View style={styles.stickerSheetImageContainer}>
-                    <Image 
-                      source={{ uri: finalStickers }} 
-                      style={styles.stickerSheetImage} 
-                    />
-                  </View>
-                  <Text style={styles.stickerSheetNote}>
-                    High-resolution sticker sheet ready for kiss-cut printing
-                  </Text>
+                  <StickerSheetPreview
+                    stickerImage={finalStickers}
+                    sheetSize={sheetSize}
+                    stickerCount={PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.variants[sheetSize].totalMinis}
+                  />
                 </View>
               ) : (
                 <View style={styles.stickerPreview}>
@@ -625,7 +622,7 @@ export default function CheckoutScreen() {
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>
                     {isStickerSheetFlow 
-                      ? `Sticker Sheet (${stickerCount} stickers @ $2.99 each)`
+                      ? `Sticker Sheet ${PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.variants[sheetSize].size} (${PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.variants[sheetSize].totalMinis} minis)`
                       : `Memory Stickers (${PRINTFUL_PRODUCTS.INDIVIDUAL_KISS_CUT_STICKERS.variants[selectedVariant as keyof typeof PRINTFUL_PRODUCTS.INDIVIDUAL_KISS_CUT_STICKERS.variants].size})`
                     }
                   </Text>

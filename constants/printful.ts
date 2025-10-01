@@ -8,14 +8,14 @@ export const PRINTFUL_CONFIG = {
 // Kiss-cut sticker sheet product configurations
 export const PRINTFUL_PRODUCTS = {
   KISS_CUT_STICKER_SHEET: {
-    id: 532, // Printful product ID for kiss-cut sticker sheets
+    id: 532,
     name: 'Kiss Cut Sticker Sheet',
     variants: {
-      'small': { id: 9513, size: '4″×6″', price: 12.99, maxStickers: 8 },
-      'medium': { id: 9514, size: '5.5″×8.5″', price: 16.99, maxStickers: 12 },
-      'large': { id: 9515, size: '8.5″×11″', price: 24.99, maxStickers: 20 },
+      '3x3': { id: 9513, size: '3″×3″', price: 12.99, cellsPerSide: 9, totalMinis: 81 },
+      '4x4': { id: 9514, size: '4″×4″', price: 16.99, cellsPerSide: 12, totalMinis: 144 },
+      '5.5x5.5': { id: 9515, size: '5.5″×5.5″', price: 24.99, cellsPerSide: 17, totalMinis: 289 },
     },
-    defaultVariant: 'medium',
+    defaultVariant: '4x4',
   },
   INDIVIDUAL_KISS_CUT_STICKERS: {
     id: 533,
@@ -34,7 +34,8 @@ export type PrintfulVariant = {
   id: number;
   size: string;
   price: number;
-  maxStickers?: number; // For sticker sheets
+  cellsPerSide?: number;
+  totalMinis?: number;
 };
 
 export type PrintfulProduct = {

@@ -161,7 +161,7 @@ export class PrintfulService {
     selectedVariant?: string;
     quantity?: number;
     isStickerSheet?: boolean;
-    stickerCount?: number;
+    sheetSize?: string;
   }): Promise<PrintfulOrderResponse> {
     try {
       const recipient: PrintfulOrderRecipient = {
@@ -177,9 +177,7 @@ export class PrintfulService {
       let orderRequest: PrintfulOrderRequest;
 
       if (orderData.isStickerSheet) {
-        // Handle sticker sheet orders
-        const stickerCount = orderData.stickerCount || 1;
-        const sheetSize = orderData.selectedVariant || PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.defaultVariant;
+        const sheetSize = orderData.sheetSize || orderData.selectedVariant || PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.defaultVariant;
         const variant = PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.variants[sheetSize as keyof typeof PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.variants];
         
         const stickerSheetPrice = variant.price;
@@ -193,7 +191,7 @@ export class PrintfulService {
             {
               sync_variant_id: variant.id,
               quantity: 1,
-              name: `Custom Kiss Cut Sticker Sheet ${variant.size} (${stickerCount} stickers)`,
+              name: `Custom Kiss Cut Sticker Sheet ${variant.size} (${variant.totalMinis} mini stickers)`,
               retail_price: formatPrintfulPrice(stickerSheetPrice),
               files: [
                 {
@@ -310,8 +308,7 @@ export class MockPrintfulService {
     let total: string;
     
     if (orderData.isStickerSheet) {
-      const stickerCount = orderData.stickerCount || 1;
-      const sheetSize = orderData.selectedVariant || PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.defaultVariant;
+      const sheetSize = orderData.sheetSize || orderData.selectedVariant || PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.defaultVariant;
       const variant = PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.variants[sheetSize as keyof typeof PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.variants];
       
       const stickerSheetPrice = variant.price;
