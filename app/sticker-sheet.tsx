@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Plus, Trash2, RotateCcw, ShoppingCart, Grid3X3, Sparkles, Download } from 'lucide-react-native';
 import { neutralColors } from '@/constants/colors';
+import { PRINTFUL_PRODUCTS } from '@/constants/printful';
 import { router } from 'expo-router';
 import { useUser, SavedSticker } from '@/contexts/UserContext';
 import * as FileSystem from 'expo-file-system';
@@ -29,9 +30,9 @@ const { width: screenWidth } = Dimensions.get('window');
 const PRINTFUL_SHEET_CONFIG = {
   // Kiss-cut sticker sheet dimensions (standard sizes)
   SHEET_SIZES: {
-    SMALL: { WIDTH_INCHES: 4, HEIGHT_INCHES: 6, name: '4"×6"' },
-    MEDIUM: { WIDTH_INCHES: 5.5, HEIGHT_INCHES: 8.5, name: '5.5"×8.5"' },
-    LARGE: { WIDTH_INCHES: 8.5, HEIGHT_INCHES: 11, name: '8.5"×11"' },
+    SMALL: { WIDTH_INCHES: 3, HEIGHT_INCHES: 3, name: '3"×3"' },
+    MEDIUM: { WIDTH_INCHES: 4, HEIGHT_INCHES: 4, name: '4"×4"' },
+    LARGE: { WIDTH_INCHES: 5.5, HEIGHT_INCHES: 5.5, name: '5.5"×5.5"' },
   },
   // Current selected size (can be made dynamic)
   CURRENT_SIZE: 'MEDIUM',
@@ -74,13 +75,13 @@ const PRINTFUL_SHEET_CONFIG = {
 
 // Canvas dimensions for UI (scaled down for mobile display)
 const CANVAS_SIZE = screenWidth - 48; // 24px padding on each side
-const CANVAS_ASPECT_RATIO = PRINTFUL_SHEET_CONFIG.CURRENT_SHEET.HEIGHT_INCHES / PRINTFUL_SHEET_CONFIG.CURRENT_SHEET.WIDTH_INCHES;
+const CANVAS_ASPECT_RATIO = 1; // Square sheets
 const CANVAS_HEIGHT = CANVAS_SIZE * CANVAS_ASPECT_RATIO;
 
 // Sticker specifications
-const STICKER_SIZE_INCHES = 1.25; // Smaller sticker size to fit more per sheet
+const STICKER_SIZE_INCHES = 0.25; // Mini sticker size to match new spec
 const STICKER_SIZE_PIXELS = Math.floor((STICKER_SIZE_INCHES / PRINTFUL_SHEET_CONFIG.CURRENT_SHEET.WIDTH_INCHES) * CANVAS_SIZE);
-const MAX_STICKERS = 24; // Maximum stickers per sheet
+const MAX_STICKERS = 144; // Maximum stickers per sheet (4x4 = 12x12 grid)
 const STICKER_OUTLINE_WIDTH = 2;
 const MIN_SPACING_PIXELS = Math.floor((PRINTFUL_SHEET_CONFIG.MIN_STICKER_SPACING_INCHES / PRINTFUL_SHEET_CONFIG.CURRENT_SHEET.WIDTH_INCHES) * CANVAS_SIZE);
 
@@ -866,6 +867,8 @@ const StickerSheetScreen = memo(() => {
           isReorder: 'false',
           isStickerSheet: 'true',
           stickerCount: selectedStickers.length.toString(),
+          sheetSize: '4x4',
+          isMultiStickerSheet: 'false',
         },
       });
     } catch (error) {
@@ -948,7 +951,7 @@ const StickerSheetScreen = memo(() => {
                   {PRINTFUL_SHEET_CONFIG.CURRENT_SHEET.name} Kiss-Cut Sheet
                 </Text>
                 <Text style={styles.canvasSubtitle}>
-                  {selectedStickers.length}/{MAX_STICKERS} stickers • Print-ready format
+                  {selectedStickers.length}/{MAX_STICKERS} mini stickers (0.25&quot; × 0.25&quot;) • Print-ready format
                 </Text>
               </View>
               <View 
@@ -1099,7 +1102,7 @@ const StickerSheetScreen = memo(() => {
                 <View>
                   <Text style={styles.libraryTitle}>Your Memory Collection</Text>
                   <Text style={styles.librarySubtitle}>
-                    Tap to add • {PRINTFUL_SHEET_CONFIG.CURRENT_SHEET.name} format • Up to {MAX_STICKERS} stickers
+                    Tap to add • {PRINTFUL_SHEET_CONFIG.CURRENT_SHEET.name} format • Up to {MAX_STICKERS} mini stickers
                   </Text>
                 </View>
                 <View style={styles.counterBadge}>
@@ -1173,7 +1176,7 @@ const StickerSheetScreen = memo(() => {
                 <View style={styles.checkoutButtonContent}>
                   <ShoppingCart size={20} color={neutralColors.white} />
                   <Text style={styles.checkoutButtonText}>
-                    Order {PRINTFUL_SHEET_CONFIG.CURRENT_SHEET.name} Sheet ($16.99)
+                    Order {PRINTFUL_SHEET_CONFIG.CURRENT_SHEET.name} Sheet (${PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.variants['4x4'].price.toFixed(2)})
                   </Text>
                   <Download size={16} color={neutralColors.white} />
                 </View>
