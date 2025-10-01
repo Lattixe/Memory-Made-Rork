@@ -43,17 +43,35 @@ export const trpcClient = createTRPCClient<AppRouter>({
           headers: options?.headers,
           body: options?.body ? 'present' : 'none'
         });
-        return fetch(url, options).then(response => {
-          console.log('[trpc] Response status:', response.status);
-          console.log('[trpc] Response ok:', response.ok);
-          if (!response.ok) {
-            console.error('[trpc] Response not ok:', response.status, response.statusText);
-          }
-          return response;
-        }).catch(error => {
-          console.error('[trpc] Fetch error:', error);
-          throw error;
-        });
+        
+        const timeoutMs = 30000;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        
+        const fetchOptions = {
+          ...options,
+          signal: controller.signal,
+        };
+        
+        return fetch(url, fetchOptions)
+          .then(response => {
+            clearTimeout(timeoutId);
+            console.log('[trpc] Response status:', response.status);
+            console.log('[trpc] Response ok:', response.ok);
+            if (!response.ok) {
+              console.error('[trpc] Response not ok:', response.status, response.statusText);
+            }
+            return response;
+          })
+          .catch(error => {
+            clearTimeout(timeoutId);
+            if (error.name === 'AbortError') {
+              console.error('[trpc] Request timeout after', timeoutMs, 'ms');
+              throw new Error(`Request timeout after ${timeoutMs}ms`);
+            }
+            console.error('[trpc] Fetch error:', error);
+            throw error;
+          });
       },
     }),
   ],
@@ -67,6 +85,29 @@ export const trpcReactClient = trpc.createClient({
       headers() {
         const token = getAuthToken();
         return token ? { authorization: `Bearer ${token}` } : {};
+      },
+      fetch(url, options) {
+        const timeoutMs = 30000;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        
+        const fetchOptions = {
+          ...options,
+          signal: controller.signal,
+        };
+        
+        return fetch(url, fetchOptions)
+          .then(response => {
+            clearTimeout(timeoutId);
+            return response;
+          })
+          .catch(error => {
+            clearTimeout(timeoutId);
+            if (error.name === 'AbortError') {
+              throw new Error(`Request timeout after ${timeoutMs}ms`);
+            }
+            throw error;
+          });
       },
     }),
   ],

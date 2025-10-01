@@ -17,9 +17,25 @@ app.use('*', async (c, next) => {
 // Enable CORS for all routes
 app.use("*", cors());
 
-// Mount tRPC router at /trpc
+// Mount tRPC router at /trpc with timeout handling
 app.use(
   "/trpc/*",
+  async (c, next) => {
+    const timeoutMs = 25000;
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Request timeout')), timeoutMs);
+    });
+
+    try {
+      await Promise.race([next(), timeoutPromise]);
+    } catch (error: any) {
+      if (error.message === 'Request timeout') {
+        console.error('[backend] Request timeout after', timeoutMs, 'ms');
+        return c.json({ error: 'Request timeout' }, 504);
+      }
+      throw error;
+    }
+  },
   trpcServer({
     endpoint: "/api/trpc",
     router: appRouter,
