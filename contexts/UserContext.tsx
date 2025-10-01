@@ -3,7 +3,6 @@ import { setAuthToken, clearAuthToken } from '@/lib/authToken';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import { safeJsonParse } from '@/utils/json';
-import { trpcClient } from '@/lib/trpc';
 
 export interface SavedSticker {
   id: string;
@@ -87,17 +86,23 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
 
   const login = useCallback(async (email: string, password: string) => {
     try {
-      console.log('[auth] Attempting login for:', email);
-      console.log('[auth] Making tRPC request to auth.login...');
-      const result = await trpcClient.auth.login.mutate({ email, password });
-      console.log('[auth] tRPC request successful');
-      console.log('[auth] Login successful:', { id: result.id, email: result.email, name: result.name });
+      console.log('[auth] Mock login for:', email);
+      
+      const mockUsersKey = '@mock_users';
+      const storedUsers = await AsyncStorage.getItem(mockUsersKey);
+      const users = storedUsers ? JSON.parse(storedUsers) : {};
+      
+      const userRecord = users[email.toLowerCase()];
+      
+      if (!userRecord || userRecord.password !== password) {
+        throw new Error('Invalid credentials');
+      }
       
       const authed: User = { 
-        id: result.id, 
-        email: result.email, 
-        name: result.name, 
-        token: result.token 
+        id: userRecord.id, 
+        email: userRecord.email, 
+        name: userRecord.name, 
+        token: `mock_token_${Date.now()}` 
       };
       
       console.log('[auth] Saving user data to AsyncStorage...');
@@ -105,21 +110,12 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
       console.log('[auth] Setting user state...');
       setUser(authed);
       console.log('[auth] Setting auth token...');
-      await setAuthToken(result.token);
+      await setAuthToken(authed.token);
       console.log('[auth] Login process completed successfully');
     } catch (error: any) {
       console.error('[auth] Error logging in:', error);
-      console.error('[auth] Error details:', {
-        message: error?.message,
-        cause: error?.cause,
-        stack: error?.stack?.substring(0, 500)
-      });
       
-      if (error?.message?.includes('Network request failed') || error?.message?.includes('fetch')) {
-        throw new Error('Cannot connect to server. Please ensure you are running the app from the Rork platform with the correct environment configuration.');
-      } else if (error?.message?.includes('404')) {
-        throw new Error('Authentication service not available. Please try again later.');
-      } else if (error?.message?.includes('Invalid')) {
+      if (error?.message?.includes('Invalid')) {
         throw new Error('Invalid credentials');
       } else {
         throw new Error(error?.message || 'Login failed. Please try again.');
@@ -129,17 +125,33 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
 
   const signup = useCallback(async (email: string, password: string, name?: string) => {
     try {
-      console.log('[auth] Attempting signup for:', email);
-      console.log('[auth] Making tRPC request to auth.signup...');
-      const result = await trpcClient.auth.signup.mutate({ email, password, name });
-      console.log('[auth] tRPC request successful');
-      console.log('[auth] Signup successful:', { id: result.id, email: result.email, name: result.name });
+      console.log('[auth] Mock signup for:', email);
+      
+      const mockUsersKey = '@mock_users';
+      const storedUsers = await AsyncStorage.getItem(mockUsersKey);
+      const users = storedUsers ? JSON.parse(storedUsers) : {};
+      
+      const emailLower = email.toLowerCase();
+      
+      if (users[emailLower]) {
+        throw new Error('Email already in use');
+      }
+      
+      const newUser = {
+        id: `user_${Date.now()}`,
+        email: email,
+        name: name || email.split('@')[0],
+        password: password
+      };
+      
+      users[emailLower] = newUser;
+      await AsyncStorage.setItem(mockUsersKey, JSON.stringify(users));
       
       const authed: User = { 
-        id: result.id, 
-        email: result.email, 
-        name: result.name, 
-        token: result.token 
+        id: newUser.id, 
+        email: newUser.email, 
+        name: newUser.name, 
+        token: `mock_token_${Date.now()}` 
       };
       
       console.log('[auth] Saving user data to AsyncStorage...');
@@ -147,21 +159,12 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
       console.log('[auth] Setting user state...');
       setUser(authed);
       console.log('[auth] Setting auth token...');
-      await setAuthToken(result.token);
+      await setAuthToken(authed.token);
       console.log('[auth] Signup process completed successfully');
     } catch (error: any) {
       console.error('[auth] Error signing up:', error);
-      console.error('[auth] Error details:', {
-        message: error?.message,
-        cause: error?.cause,
-        stack: error?.stack?.substring(0, 500)
-      });
       
-      if (error?.message?.includes('Network request failed') || error?.message?.includes('fetch')) {
-        throw new Error('Cannot connect to server. Please ensure you are running the app from the Rork platform with the correct environment configuration.');
-      } else if (error?.message?.includes('404')) {
-        throw new Error('Authentication service not available. Please try again later.');
-      } else if (error?.message?.includes('already in use')) {
+      if (error?.message?.includes('already in use')) {
         throw new Error('Email already in use');
       } else {
         throw new Error(error?.message || 'Signup failed. Please try again.');
