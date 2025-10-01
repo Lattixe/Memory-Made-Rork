@@ -41,16 +41,43 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
   }, [onDeleteSticker]);
 
   const handleReorderSticker = useCallback((sticker: SavedSticker) => {
-    // Pass the sticker data directly for instant navigation
-    router.push({
-      pathname: '/checkout',
-      params: {
-        stickerId: sticker.id,
-        originalImage: sticker.originalImage,
-        finalStickers: sticker.stickerImage,
-        isReorder: 'true',
-      },
-    });
+    Alert.alert(
+      'Reorder Options',
+      'How would you like to reorder this sticker?',
+      [
+        {
+          text: 'Single Sticker',
+          onPress: () => {
+            router.push({
+              pathname: '/checkout',
+              params: {
+                stickerId: sticker.id,
+                originalImage: sticker.originalImage,
+                finalStickers: sticker.stickerImage,
+                isReorder: 'true',
+              },
+            });
+          },
+        },
+        {
+          text: 'Mini Sticker Sheet',
+          onPress: () => {
+            router.push({
+              pathname: '/sheet-size-selection',
+              params: {
+                stickerImage: sticker.stickerImage,
+                originalImage: sticker.originalImage,
+                isReorder: 'true',
+              },
+            });
+          },
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
   }, []);
 
   const handleEditSticker = useCallback((sticker: SavedSticker) => {
