@@ -7,6 +7,13 @@ import { createContext } from "./trpc/create-context";
 // app will be mounted at /api
 const app = new Hono();
 
+// Add middleware to log all requests BEFORE other handlers
+app.use('*', async (c, next) => {
+  console.log('[backend] Request:', c.req.method, c.req.url);
+  await next();
+  console.log('[backend] Response status:', c.res.status);
+});
+
 // Enable CORS for all routes
 app.use("*", cors());
 
@@ -20,18 +27,10 @@ app.use(
     onError: ({ error, path }) => {
       console.error('[backend] tRPC error on path:', path);
       console.error('[backend] tRPC error:', error);
+      console.error('[backend] tRPC error stack:', error.stack);
     },
   })
 );
-
-// Add middleware to log all requests
-app.use('*', async (c, next) => {
-  console.log('[backend] Request:', c.req.method, c.req.url);
-  const headers = c.req.header();
-  console.log('[backend] Headers:', headers);
-  await next();
-  console.log('[backend] Response status:', c.res.status);
-});
 
 // Simple health check endpoint
 app.get("/", (c) => {

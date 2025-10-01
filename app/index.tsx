@@ -780,15 +780,15 @@ export default function UploadScreen() {
                         activeOpacity={0.7}
                       >
                         {isGenerating ? (
-                          <>
+                          <View style={styles.buttonContent}>
                             <ActivityIndicator size="small" color={memoryMadeColors.white} />
                             <Text style={styles.generateButtonText}>Creating your custom sticker...</Text>
-                          </>
+                          </View>
                         ) : (
-                          <>
+                          <View style={styles.buttonContent}>
                             <Wand2 size={20} color={memoryMadeColors.white} />
                             <Text style={styles.generateButtonText}>Generate Custom Sticker</Text>
-                          </>
+                          </View>
                         )}
                       </TouchableOpacity>
                     )}
@@ -806,15 +806,15 @@ export default function UploadScreen() {
                     activeOpacity={0.7}
                   >
                     {isProcessing ? (
-                      <>
+                      <View style={styles.buttonContent}>
                         <ActivityIndicator size="small" color={memoryMadeColors.white} />
                         <Text style={styles.generateButtonText}>Creating your memory stickers...</Text>
-                      </>
+                      </View>
                     ) : (
-                      <>
+                      <View style={styles.buttonContent}>
                         <Text style={styles.generateButtonText}>Create Memory Stickers</Text>
                         <ArrowRight size={20} color={memoryMadeColors.white} />
-                      </>
+                      </View>
                     )}
                   </TouchableOpacity>
                 )}
@@ -1116,5 +1116,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 6,
     elevation: 3,
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 });

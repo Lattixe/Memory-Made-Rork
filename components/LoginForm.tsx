@@ -208,10 +208,10 @@ export default function LoginForm({ onLogin, onSignup }: LoginFormProps) {
               disabled={!canSubmit || isLoading}
             >
               {isLoading ? (
-                <>
+                <View style={styles.buttonContent}>
                   <ActivityIndicator size="small" color={memoryMadeColors.white} />
                   <Text style={styles.primaryButtonText}>Logging In...</Text>
-                </>
+                </View>
               ) : (
                 <Text style={styles.primaryButtonText}>Log In</Text>
               )}
@@ -224,10 +224,10 @@ export default function LoginForm({ onLogin, onSignup }: LoginFormProps) {
               disabled={!canSubmit || isLoading}
             >
               {isLoading ? (
-                <>
+                <View style={styles.buttonContent}>
                   <ActivityIndicator size="small" color={memoryMadeColors.primary} />
                   <Text style={styles.outlineButtonText}>Creating Account...</Text>
-                </>
+                </View>
               ) : (
                 <Text style={styles.outlineButtonText}>Create Account</Text>
               )}
@@ -401,5 +401,10 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600' as const,
     color: memoryMadeColors.text.primary,
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 });
