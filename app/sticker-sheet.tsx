@@ -897,7 +897,9 @@ const StickerSheetScreen = memo(() => {
             <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
               <ArrowLeft size={24} color={neutralColors.text.primary} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Create Sticker Sheet</Text>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.headerTitle}>Create Sticker Sheet</Text>
+            </View>
             <View style={styles.placeholder} />
           </View>
 
@@ -925,7 +927,9 @@ const StickerSheetScreen = memo(() => {
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <ArrowLeft size={24} color={neutralColors.text.primary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create Sticker Sheet</Text>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Create Sticker Sheet</Text>
+          </View>
           <TouchableOpacity style={styles.clearButton} onPress={clearSheet}>
             <Trash2 size={20} color={neutralColors.error} />
           </TouchableOpacity>
@@ -1207,6 +1211,11 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 10,
     backgroundColor: neutralColors.surface,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 16,

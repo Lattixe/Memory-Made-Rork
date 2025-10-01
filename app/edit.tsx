@@ -618,14 +618,18 @@ const EditScreen = () => {
           >
             <ArrowLeft size={20} color={neutralColors.text.primary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Edit Sticker</Text>
-          {versions.length > 1 && (
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Edit Sticker</Text>
+          </View>
+          {versions.length > 1 ? (
             <TouchableOpacity
               style={styles.resetButton}
               onPress={handleResetToOriginal}
             >
               <RotateCcw size={16} color={neutralColors.text.secondary} />
             </TouchableOpacity>
+          ) : (
+            <View style={styles.headerSpacer} />
           )}
         </View>
 
@@ -803,6 +807,11 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 10,
     backgroundColor: neutralColors.surface,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 16,
