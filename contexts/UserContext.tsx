@@ -115,13 +115,12 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
         stack: error?.stack?.substring(0, 500)
       });
       
-      // Enhanced error handling
-      if (error?.message?.includes('404')) {
+      if (error?.message?.includes('Network request failed') || error?.message?.includes('fetch')) {
+        throw new Error('Cannot connect to server. Please ensure you are running the app from the Rork platform with the correct environment configuration.');
+      } else if (error?.message?.includes('404')) {
         throw new Error('Authentication service not available. Please try again later.');
       } else if (error?.message?.includes('Invalid')) {
         throw new Error('Invalid credentials');
-      } else if (error?.message?.includes('fetch')) {
-        throw new Error('Network error. Please check your connection.');
       } else {
         throw new Error(error?.message || 'Login failed. Please try again.');
       }
@@ -158,13 +157,12 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
         stack: error?.stack?.substring(0, 500)
       });
       
-      // Enhanced error handling
-      if (error?.message?.includes('404')) {
+      if (error?.message?.includes('Network request failed') || error?.message?.includes('fetch')) {
+        throw new Error('Cannot connect to server. Please ensure you are running the app from the Rork platform with the correct environment configuration.');
+      } else if (error?.message?.includes('404')) {
         throw new Error('Authentication service not available. Please try again later.');
       } else if (error?.message?.includes('already in use')) {
         throw new Error('Email already in use');
-      } else if (error?.message?.includes('fetch')) {
-        throw new Error('Network error. Please check your connection.');
       } else {
         throw new Error(error?.message || 'Signup failed. Please try again.');
       }

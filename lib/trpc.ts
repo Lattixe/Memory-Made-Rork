@@ -11,13 +11,15 @@ const getBaseUrl = () => {
     console.log('[trpc] Using EXPO_PUBLIC_RORK_API_BASE_URL:', process.env.EXPO_PUBLIC_RORK_API_BASE_URL);
     return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
   }
-  if (typeof window !== 'undefined') {
+  
+  if (typeof window !== 'undefined' && window.location?.origin) {
     console.log('[trpc] Using window.location.origin:', window.location.origin);
     return window.location.origin;
   }
-  throw new Error(
-    "No base url found, please set EXPO_PUBLIC_RORK_API_BASE_URL"
-  );
+  
+  console.error('[trpc] No base URL found. Backend features will not work.');
+  console.error('[trpc] Please ensure the app is running with the correct environment variables.');
+  return '';
 };
 
 const baseUrl = getBaseUrl();
