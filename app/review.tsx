@@ -15,7 +15,7 @@ import {
   FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { RefreshCw, Upload, ArrowRight, Sparkles, Edit3, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { RefreshCw, Upload, ArrowRight, Sparkles, Edit3, ChevronLeft, ChevronRight, Grid3X3 } from 'lucide-react-native';
 import { neutralColors } from '@/constants/colors';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useUser } from '@/contexts/UserContext';
@@ -750,17 +750,41 @@ export default function ReviewScreen() {
             </View>
 
             {!loadError && !isLoadingSticker && (
-              <TouchableOpacity
-                style={[styles.checkoutButton, (isRegenerating || isEditing || !currentStickers) && styles.buttonDisabled]}
-                onPress={proceedToCheckout}
-                disabled={isRegenerating || isEditing || !currentStickers}
-              >
-                <Sparkles size={20} color={neutralColors.white} />
-                <Text style={styles.checkoutButtonText}>
-                  {isCustom ? 'Ship My Sticker' : 'Ship My Memory'}
-                </Text>
-                <ArrowRight size={20} color={neutralColors.white} />
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity
+                  style={[styles.multiStickerButton, (isRegenerating || isEditing || !currentStickers) && styles.buttonDisabled]}
+                  onPress={() => {
+                    const stickerToUse = (!isCustom && currentVersionIndex === 0 && stickerVersions.length > 1) 
+                      ? stickerVersions[1] 
+                      : currentStickers;
+                    router.push({
+                      pathname: '/sheet-size-selection',
+                      params: {
+                        stickerImage: stickerToUse,
+                        originalImage,
+                      },
+                    });
+                  }}
+                  disabled={isRegenerating || isEditing || !currentStickers}
+                >
+                  <Grid3X3 size={20} color={neutralColors.primary} />
+                  <Text style={styles.multiStickerButtonText}>
+                    Create Mini Sticker Sheet
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.checkoutButton, (isRegenerating || isEditing || !currentStickers) && styles.buttonDisabled]}
+                  onPress={proceedToCheckout}
+                  disabled={isRegenerating || isEditing || !currentStickers}
+                >
+                  <Sparkles size={20} color={neutralColors.white} />
+                  <Text style={styles.checkoutButtonText}>
+                    {isCustom ? 'Ship Single Sticker' : 'Ship Single Sticker'}
+                  </Text>
+                  <ArrowRight size={20} color={neutralColors.white} />
+                </TouchableOpacity>
+              </>
             )}
             </View>
           </ScrollView>
@@ -972,6 +996,26 @@ const styles = StyleSheet.create({
   },
   checkoutButtonText: {
     color: neutralColors.white,
+    fontSize: 17,
+    fontWeight: '700' as const,
+    letterSpacing: 0.3,
+  },
+  multiStickerButton: {
+    backgroundColor: neutralColors.white,
+    paddingVertical: 18,
+    paddingHorizontal: 32,
+    borderRadius: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    borderWidth: 2,
+    borderColor: neutralColors.primary,
+    marginBottom: 16,
+    marginHorizontal: 4,
+  },
+  multiStickerButtonText: {
+    color: neutralColors.primary,
     fontSize: 17,
     fontWeight: '700' as const,
     letterSpacing: 0.3,
