@@ -25,7 +25,7 @@ export default function StickerSheetPreview({
     );
   }
 
-  const [cols] = stickerOption.grid;
+  const [cols, rows] = stickerOption.grid;
 
   return (
     <View style={styles.container}>
@@ -42,7 +42,7 @@ export default function StickerSheetPreview({
             style={[
               styles.grid,
               {
-                aspectRatio: 1,
+                aspectRatio: cols / rows,
               },
             ]}
           >
@@ -53,7 +53,7 @@ export default function StickerSheetPreview({
                   styles.gridCell,
                   {
                     width: `${100 / cols}%`,
-                    aspectRatio: 1,
+                    height: `${100 / rows}%`,
                   },
                 ]}
               >
