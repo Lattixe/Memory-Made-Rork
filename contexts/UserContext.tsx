@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Platform } from 'react-native';
 import { setAuthToken, clearAuthToken } from '@/lib/authToken';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
@@ -44,9 +45,10 @@ export interface UserContextType {
 
 const USER_STORAGE_KEY = '@user_data';
 const STICKERS_STORAGE_KEY = '@saved_stickers';
-const STICKERS_DIR = `${FileSystem.documentDirectory}stickers/`;
+const STICKERS_DIR = FileSystem.documentDirectory ? `${FileSystem.documentDirectory}stickers/` : '';
 
 const ensureStickersDirectory = async () => {
+  if (Platform.OS === 'web') return;
   const dirInfo = await FileSystem.getInfoAsync(STICKERS_DIR);
   if (!dirInfo.exists) {
     await FileSystem.makeDirectoryAsync(STICKERS_DIR, { intermediates: true });
@@ -54,6 +56,9 @@ const ensureStickersDirectory = async () => {
 };
 
 const saveImageToFile = async (base64Data: string, filename: string): Promise<string> => {
+  if (Platform.OS === 'web') {
+    return base64Data;
+  }
   await ensureStickersDirectory();
   const filePath = `${STICKERS_DIR}${filename}`;
   await FileSystem.writeAsStringAsync(filePath, base64Data, {
@@ -64,6 +69,9 @@ const saveImageToFile = async (base64Data: string, filename: string): Promise<st
 
 const readImageFromFile = async (filePath: string): Promise<string> => {
   try {
+    if (Platform.OS === 'web') {
+      return `data:image/png;base64,${filePath}`;
+    }
     const base64 = await FileSystem.readAsStringAsync(filePath, {
       encoding: FileSystem.EncodingType.Base64,
     });
@@ -76,6 +84,7 @@ const readImageFromFile = async (filePath: string): Promise<string> => {
 
 const deleteImageFile = async (filePath: string): Promise<void> => {
   try {
+    if (Platform.OS === 'web') return;
     const fileInfo = await FileSystem.getInfoAsync(filePath);
     if (fileInfo.exists) {
       await FileSystem.deleteAsync(filePath);
