@@ -366,11 +366,10 @@ const EditScreen = () => {
       
       console.log('Edit completed successfully!');
       
-      // Skip background removal for AI-generated stickers (they already have transparent backgrounds)
-      // Only do auto-cropping
-      console.log('Processing AI-generated sticker...');
+      // Always apply background removal to ensure clean transparent backgrounds
+      console.log('Processing sticker with background removal...');
       
-      const cleanupPromise = processStickerImage(data.image.base64Data, false, true); // Skip bg removal for AI stickers
+      const cleanupPromise = processStickerImage(data.image.base64Data, false, false);
       const timeoutPromise = new Promise<string>((resolve) => 
         setTimeout(() => {
           console.log('Processing timeout, using unprocessed image');
