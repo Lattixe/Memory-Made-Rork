@@ -410,7 +410,7 @@ export default function CheckoutScreen() {
                   <StickerSheetPreview
                     stickerImage={finalStickers}
                     sheetSize={sheetSize}
-                    stickerCount={PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.variants[sheetSize].totalMinis}
+                    stickerCount={stickerCount}
                   />
                 </View>
               ) : (
@@ -622,7 +622,7 @@ export default function CheckoutScreen() {
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>
                     {isStickerSheetFlow 
-                      ? `Sticker Sheet ${PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.variants[sheetSize].size} (${PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.variants[sheetSize].totalMinis} minis)`
+                      ? `Sticker Sheet ${PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.variants[sheetSize].size} (${stickerCount} stickers)`
                       : `Memory Stickers (${PRINTFUL_PRODUCTS.INDIVIDUAL_KISS_CUT_STICKERS.variants[selectedVariant as keyof typeof PRINTFUL_PRODUCTS.INDIVIDUAL_KISS_CUT_STICKERS.variants].size})`
                     }
                   </Text>

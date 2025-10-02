@@ -1,8 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView } from 'react-native';
 import { neutralColors } from '@/constants/colors';
-
-type SheetSize = '3x3' | '4x4' | '5.5x5.5';
+import { STICKER_SHEET_LAYOUTS, getStickerOption, SheetSize } from '@/constants/stickerSheetLayouts';
 
 type StickerSheetPreviewProps = {
   stickerImage: string;
@@ -10,41 +9,34 @@ type StickerSheetPreviewProps = {
   stickerCount: number;
 };
 
-const SHEET_CONFIGS = {
-  '3x3': {
-    displayName: '3" × 3"',
-    cellsPerSide: 9,
-    totalMinis: 81,
-  },
-  '4x4': {
-    displayName: '4" × 4"',
-    cellsPerSide: 12,
-    totalMinis: 144,
-  },
-  '5.5x5.5': {
-    displayName: '5.5" × 5.5"',
-    cellsPerSide: 17,
-    totalMinis: 289,
-  },
-};
-
 export default function StickerSheetPreview({
   stickerImage,
   sheetSize,
   stickerCount,
 }: StickerSheetPreviewProps) {
-  const config = SHEET_CONFIGS[sheetSize];
-
+  const layout = STICKER_SHEET_LAYOUTS[sheetSize];
+  const stickerOption = getStickerOption(sheetSize, stickerCount);
+  
   const gridItems = useMemo(() => {
-    return Array.from({ length: config.totalMinis }, (_, i) => i);
-  }, [config.totalMinis]);
+    return Array.from({ length: stickerCount }, (_, i) => i);
+  }, [stickerCount]);
+  
+  if (!stickerOption) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>Invalid sticker configuration</Text>
+      </View>
+    );
+  }
+
+  const [cols, rows] = stickerOption.grid;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Sticker Sheet Preview</Text>
         <Text style={styles.subtitle}>
-          {config.displayName} • {config.totalMinis} mini stickers (0.25&quot; × 0.25&quot; each)
+          {layout.displayName} • {stickerCount} stickers ({stickerOption.stickerSizeInches.toFixed(2)}&quot; × {stickerOption.stickerSizeInches.toFixed(2)}&quot; each)
         </Text>
       </View>
 
@@ -69,7 +61,7 @@ export default function StickerSheetPreview({
                   style={[
                     styles.gridCell,
                     {
-                      width: `${100 / config.cellsPerSide}%`,
+                      width: `${100 / cols}%`,
                       aspectRatio: 1,
                     },
                   ]}
@@ -94,13 +86,13 @@ export default function StickerSheetPreview({
               <View style={styles.infoItem}>
                 <Text style={styles.infoBullet}>✓</Text>
                 <Text style={styles.infoText}>
-                  One {config.displayName} kiss-cut sticker sheet
+                  One {layout.displayName} kiss-cut sticker sheet
                 </Text>
               </View>
               <View style={styles.infoItem}>
                 <Text style={styles.infoBullet}>✓</Text>
                 <Text style={styles.infoText}>
-                  {config.totalMinis} individual mini stickers (0.25&quot; × 0.25&quot;)
+                  {stickerCount} individual stickers ({stickerOption.stickerSizeInches.toFixed(2)}&quot; × {stickerOption.stickerSizeInches.toFixed(2)}&quot;)
                 </Text>
               </View>
               <View style={styles.infoItem}>
@@ -134,21 +126,21 @@ export default function StickerSheetPreview({
             <Text style={styles.specsTitle}>Technical Specifications:</Text>
             <View style={styles.specRow}>
               <Text style={styles.specLabel}>Sheet Size:</Text>
-              <Text style={styles.specValue}>{config.displayName}</Text>
+              <Text style={styles.specValue}>{layout.displayName}</Text>
             </View>
             <View style={styles.specRow}>
               <Text style={styles.specLabel}>Grid Layout:</Text>
               <Text style={styles.specValue}>
-                {config.cellsPerSide} × {config.cellsPerSide}
+                {cols} × {rows}
               </Text>
             </View>
             <View style={styles.specRow}>
-              <Text style={styles.specLabel}>Mini Sticker Size:</Text>
-              <Text style={styles.specValue}>0.25&quot; × 0.25&quot;</Text>
+              <Text style={styles.specLabel}>Sticker Size:</Text>
+              <Text style={styles.specValue}>{stickerOption.stickerSizeInches.toFixed(2)}&quot; × {stickerOption.stickerSizeInches.toFixed(2)}&quot;</Text>
             </View>
             <View style={styles.specRow}>
               <Text style={styles.specLabel}>Total Stickers:</Text>
-              <Text style={styles.specValue}>{config.totalMinis}</Text>
+              <Text style={styles.specValue}>{stickerCount}</Text>
             </View>
             <View style={styles.specRow}>
               <Text style={styles.specLabel}>Print Quality:</Text>
@@ -294,5 +286,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600' as const,
     color: neutralColors.text.primary,
+  },
+  errorText: {
+    fontSize: 16,
+    color: neutralColors.text.secondary,
+    textAlign: 'center',
+    padding: 20,
   },
 });
