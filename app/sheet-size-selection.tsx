@@ -9,18 +9,17 @@ import {
   ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, Grid3X3, Check } from 'lucide-react-native';
+import { ArrowLeft, Grid3X3, Check, Layers } from 'lucide-react-native';
 import { neutralColors } from '@/constants/colors';
+import { STICKER_SHEET_LAYOUTS, SheetSize as LayoutSheetSize } from '@/constants/stickerSheetLayouts';
 import { router, useLocalSearchParams } from 'expo-router';
 
-type SheetSize = '3x3' | '4x4' | '5.5x5.5';
+type SheetSize = '3x3' | '4x4' | '5x5';
 
 type SheetConfig = {
   size: SheetSize;
   displayName: string;
-  inches: [number, number];
-  cellsPerSide: number;
-  totalMinis: number;
+  inches: number;
   price: number;
   description: string;
 };
@@ -29,27 +28,21 @@ const SHEET_CONFIGS: SheetConfig[] = [
   {
     size: '3x3',
     displayName: '3" × 3"',
-    inches: [3.0, 3.0],
-    cellsPerSide: 9,
-    totalMinis: 81,
+    inches: 3.0,
     price: 12.99,
     description: 'Perfect for small collections',
   },
   {
     size: '4x4',
     displayName: '4" × 4"',
-    inches: [4.0, 4.0],
-    cellsPerSide: 12,
-    totalMinis: 144,
+    inches: 4.0,
     price: 16.99,
     description: 'Most popular size',
   },
   {
-    size: '5.5x5.5',
-    displayName: '5.5" × 5.5"',
-    inches: [5.5, 5.5],
-    cellsPerSide: 17,
-    totalMinis: 289,
+    size: '5x5',
+    displayName: '5" × 5"',
+    inches: 5.0,
     price: 24.99,
     description: 'Maximum stickers per sheet',
   },
@@ -62,7 +55,11 @@ export default function SheetSizeSelectionScreen() {
   const originalImage = typeof params.originalImage === 'string' ? params.originalImage : '';
   
   const [selectedSize, setSelectedSize] = useState<SheetSize>('4x4');
+  const [selectedStickerCount, setSelectedStickerCount] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+
+  const currentLayout = STICKER_SHEET_LAYOUTS[selectedSize as LayoutSheetSize];
+  const currentStickerCount = selectedStickerCount ?? currentLayout.defaultOption.count;
 
   const handleGenerateSheet = async () => {
     if (!stickerImage) {
@@ -78,15 +75,18 @@ export default function SheetSizeSelectionScreen() {
         throw new Error('Invalid sheet size selected');
       }
 
-      // Navigate to checkout with sheet generation params
+      const stickerOption = currentLayout.options.find(opt => opt.count === currentStickerCount);
+      if (!stickerOption) {
+        throw new Error('Invalid sticker count selected');
+      }
+
       router.push({
-        pathname: '/checkout',
+        pathname: '/sticker-sheet',
         params: {
+          stickerImage,
           originalImage,
-          finalStickers: stickerImage,
           sheetSize: selectedSize,
-          sheetConfig: JSON.stringify(selectedConfig),
-          isMultiStickerSheet: 'true',
+          stickerCount: currentStickerCount.toString(),
         },
       });
     } catch (error) {
@@ -122,10 +122,10 @@ export default function SheetSizeSelectionScreen() {
           <View style={styles.content}>
             <View style={styles.introSection}>
               <Grid3X3 size={32} color={neutralColors.primary} />
-              <Text style={styles.introTitle}>Dense Mini Sticker Sheets</Text>
+              <Text style={styles.introTitle}>Custom Sticker Sheets</Text>
               <Text style={styles.introDescription}>
-                Each sheet is filled with 0.25&quot; × 0.25&quot; mini stickers of your design, 
-                perfect for planners, journals, and crafts.
+                Choose your sheet size and sticker count. Each sticker is sized perfectly 
+                for planners, journals, and crafts.
               </Text>
             </View>
 
@@ -160,16 +160,14 @@ export default function SheetSizeSelectionScreen() {
 
                   <View style={styles.sizeDetails}>
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Mini Stickers:</Text>
-                      <Text style={styles.detailValue}>{config.totalMinis} stickers</Text>
+                      <Text style={styles.detailLabel}>Sheet Size:</Text>
+                      <Text style={styles.detailValue}>{config.displayName}</Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Grid Layout:</Text>
-                      <Text style={styles.detailValue}>{config.cellsPerSide} × {config.cellsPerSide}</Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Each Sticker:</Text>
-                      <Text style={styles.detailValue}>0.25&quot; × 0.25&quot;</Text>
+                      <Text style={styles.detailLabel}>Available Options:</Text>
+                      <Text style={styles.detailValue}>
+                        {STICKER_SHEET_LAYOUTS[config.size as LayoutSheetSize].options.length} layouts
+                      </Text>
                     </View>
                   </View>
 
@@ -184,6 +182,57 @@ export default function SheetSizeSelectionScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            {selectedSize && (
+              <View style={styles.stickerCountSection}>
+                <View style={styles.sectionHeader}>
+                  <Layers size={24} color={neutralColors.primary} />
+                  <Text style={styles.sectionTitle}>Choose Sticker Count</Text>
+                </View>
+                <Text style={styles.sectionDescription}>
+                  Select how many stickers you want on your {currentLayout.displayName} sheet
+                </Text>
+                
+                <View style={styles.countOptionsContainer}>
+                  {currentLayout.options.map((option) => (
+                    <TouchableOpacity
+                      key={option.count}
+                      style={[
+                        styles.countOption,
+                        currentStickerCount === option.count && styles.countOptionSelected,
+                      ]}
+                      onPress={() => setSelectedStickerCount(option.count)}
+                      disabled={isGenerating}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.countOptionHeader}>
+                        <Text style={[
+                          styles.countOptionName,
+                          currentStickerCount === option.count && styles.countOptionNameSelected,
+                        ]}>
+                          {option.displayName}
+                        </Text>
+                        {currentStickerCount === option.count && (
+                          <View style={styles.countCheckmark}>
+                            <Check size={16} color={neutralColors.white} />
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.countOptionDescription}>{option.description}</Text>
+                      <View style={styles.countOptionDetails}>
+                        <Text style={styles.countOptionDetail}>
+                          {option.grid[0]}×{option.grid[1]} grid
+                        </Text>
+                        <Text style={styles.countOptionDetail}>•</Text>
+                        <Text style={styles.countOptionDetail}>
+                          {option.count} stickers
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
 
             <View style={styles.featuresSection}>
               <Text style={styles.featuresTitle}>What You Get:</Text>
@@ -232,7 +281,7 @@ export default function SheetSizeSelectionScreen() {
               <View style={styles.buttonContent}>
                 <Grid3X3 size={20} color={neutralColors.white} />
                 <Text style={styles.generateButtonText}>
-                  Generate {SHEET_CONFIGS.find(c => c.size === selectedSize)?.displayName} Sheet
+                  Create Sheet ({currentStickerCount} stickers)
                 </Text>
               </View>
             )}
@@ -460,5 +509,81 @@ const styles = StyleSheet.create({
     color: neutralColors.white,
     fontSize: 16,
     fontWeight: '600' as const,
+  },
+  stickerCountSection: {
+    marginBottom: 32,
+    backgroundColor: neutralColors.white,
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: neutralColors.border,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: neutralColors.text.primary,
+  },
+  sectionDescription: {
+    fontSize: 14,
+    color: neutralColors.text.secondary,
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  countOptionsContainer: {
+    gap: 12,
+  },
+  countOption: {
+    backgroundColor: neutralColors.surface,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: neutralColors.border,
+  },
+  countOptionSelected: {
+    borderColor: neutralColors.primary,
+    backgroundColor: neutralColors.primary + '08',
+  },
+  countOptionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  countOptionName: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: neutralColors.text.primary,
+  },
+  countOptionNameSelected: {
+    color: neutralColors.primary,
+  },
+  countCheckmark: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: neutralColors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  countOptionDescription: {
+    fontSize: 13,
+    color: neutralColors.text.secondary,
+    marginBottom: 8,
+  },
+  countOptionDetails: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  countOptionDetail: {
+    fontSize: 12,
+    color: neutralColors.text.secondary,
+    fontWeight: '500' as const,
   },
 });
