@@ -178,36 +178,57 @@ const StickerSheetScreen = memo(() => {
 
     console.log('[Auto-Arrange] Starting with', selectedStickers.length, 'stickers');
     console.log('[Auto-Arrange] Sheet size:', currentSheetSize, 'Sticker count:', currentStickerCount);
+    console.log('[Auto-Arrange] Grid:', COLS, 'x', ROWS);
+    console.log('[Auto-Arrange] Sticker size:', STICKER_SIZE_PIXELS, 'Gutter:', MIN_SPACING_PIXELS);
+    console.log('[Auto-Arrange] Safe margin:', SAFE_MARGIN_CANVAS);
+    console.log('[Auto-Arrange] Printable area:', PRINTABLE_CANVAS_WIDTH, 'x', PRINTABLE_CANVAS_HEIGHT);
 
     const totalGridWidth = COLS * STICKER_SIZE_PIXELS + (COLS - 1) * MIN_SPACING_PIXELS;
     const totalGridHeight = ROWS * STICKER_SIZE_PIXELS + (ROWS - 1) * MIN_SPACING_PIXELS;
     
-    const startX = SAFE_MARGIN_CANVAS + Math.floor((PRINTABLE_CANVAS_WIDTH - totalGridWidth) / 2);
-    const startY = SAFE_MARGIN_CANVAS + Math.floor((PRINTABLE_CANVAS_HEIGHT - totalGridHeight) / 2);
+    console.log('[Auto-Arrange] Total grid size:', totalGridWidth, 'x', totalGridHeight);
+    
+    const startX = SAFE_MARGIN_CANVAS + Math.max(0, (PRINTABLE_CANVAS_WIDTH - totalGridWidth) / 2);
+    const startY = SAFE_MARGIN_CANVAS + Math.max(0, (PRINTABLE_CANVAS_HEIGHT - totalGridHeight) / 2);
+    
+    console.log('[Auto-Arrange] Start position:', startX, ',', startY);
 
-    const newPositions = selectedStickers.map((item, index) => {
+    const newPositions = selectedStickers.slice(0, currentStickerCount).map((item, index) => {
       const row = Math.floor(index / COLS);
       const col = index % COLS;
       
       const x = startX + col * (STICKER_SIZE_PIXELS + MIN_SPACING_PIXELS);
       const y = startY + row * (STICKER_SIZE_PIXELS + MIN_SPACING_PIXELS);
       
+      const maxX = SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_WIDTH - STICKER_SIZE_PIXELS;
+      const maxY = SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_HEIGHT - STICKER_SIZE_PIXELS;
+      
+      const clampedX = Math.max(SAFE_MARGIN_CANVAS, Math.min(maxX, x));
+      const clampedY = Math.max(SAFE_MARGIN_CANVAS, Math.min(maxY, y));
+      
+      console.log(`[Auto-Arrange] Sticker ${index}: (${col}, ${row}) -> (${clampedX}, ${clampedY})`);
+      
       return {
         ...item,
-        x,
-        y,
+        x: clampedX,
+        y: clampedY,
         rotation: 0,
         isOutOfBounds: false,
         isColliding: false,
       };
     });
     
+    console.log('[Auto-Arrange] Arranged', newPositions.length, 'stickers');
+    
     setSelectedStickers(newPositions);
     setValidationErrors({ outOfBounds: [], colliding: [] });
     panResponders.current = {};
     animatedValues.current = {};
     
-    setTimeout(() => validatePositions(), 100);
+    setTimeout(() => {
+      console.log('[Auto-Arrange] Running validation...');
+      validatePositions();
+    }, 100);
   }, [selectedStickers, currentSheetSize, currentStickerCount, STICKER_SIZE_PIXELS, MIN_SPACING_PIXELS, SAFE_MARGIN_CANVAS, PRINTABLE_CANVAS_WIDTH, PRINTABLE_CANVAS_HEIGHT, COLS, ROWS, validatePositions]);
 
   const createPanResponder = useCallback((stickerId: string, currentX: number, currentY: number) => {
