@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import { safeJsonParse } from '@/utils/json';
 import * as FileSystem from 'expo-file-system';
+import { saveImageToIndexedDB, getImageFromIndexedDB, deleteImageFromIndexedDB, clearAllImagesFromIndexedDB } from '@/utils/webImageStorage';
 
 export interface SavedSticker {
   id: string;
@@ -57,7 +58,8 @@ const ensureStickersDirectory = async () => {
 
 const saveImageToFile = async (base64Data: string, filename: string): Promise<string> => {
   if (Platform.OS === 'web') {
-    return base64Data;
+    await saveImageToIndexedDB(filename, base64Data);
+    return filename;
   }
   await ensureStickersDirectory();
   const filePath = `${STICKERS_DIR}${filename}`;
@@ -70,7 +72,11 @@ const saveImageToFile = async (base64Data: string, filename: string): Promise<st
 const readImageFromFile = async (filePath: string): Promise<string> => {
   try {
     if (Platform.OS === 'web') {
-      return `data:image/png;base64,${filePath}`;
+      const base64 = await getImageFromIndexedDB(filePath);
+      if (!base64) {
+        throw new Error(`Image not found: ${filePath}`);
+      }
+      return `data:image/png;base64,${base64}`;
     }
     const base64 = await FileSystem.readAsStringAsync(filePath, {
       encoding: FileSystem.EncodingType.Base64,
@@ -84,7 +90,10 @@ const readImageFromFile = async (filePath: string): Promise<string> => {
 
 const deleteImageFile = async (filePath: string): Promise<void> => {
   try {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web') {
+      await deleteImageFromIndexedDB(filePath);
+      return;
+    }
     const fileInfo = await FileSystem.getInfoAsync(filePath);
     if (fileInfo.exists) {
       await FileSystem.deleteAsync(filePath);
@@ -263,12 +272,16 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
       const metadataStr = await AsyncStorage.getItem(STICKERS_STORAGE_KEY);
       if (metadataStr) {
         const metadata: StickerMetadata[] = JSON.parse(metadataStr);
-        await Promise.all(
-          metadata.flatMap(m => [
-            deleteImageFile(m.originalImagePath),
-            deleteImageFile(m.stickerImagePath),
-          ])
-        );
+        if (Platform.OS === 'web') {
+          await clearAllImagesFromIndexedDB();
+        } else {
+          await Promise.all(
+            metadata.flatMap(m => [
+              deleteImageFile(m.originalImagePath),
+              deleteImageFile(m.stickerImagePath),
+            ])
+          );
+        }
       }
       
       await AsyncStorage.multiRemove([USER_STORAGE_KEY, STICKERS_STORAGE_KEY]);
