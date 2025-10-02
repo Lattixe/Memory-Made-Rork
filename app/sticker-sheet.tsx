@@ -16,75 +16,34 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Plus, Trash2, RotateCcw, ShoppingCart, Grid3X3, Sparkles, Download } from 'lucide-react-native';
 import { neutralColors } from '@/constants/colors';
-import { PRINTFUL_PRODUCTS } from '@/constants/printful';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useUser, SavedSticker } from '@/contexts/UserContext';
 import * as FileSystem from 'expo-file-system';
 import { captureRef } from 'react-native-view-shot';
+import { STICKER_SHEET_LAYOUTS, calculateGridDimensions, SheetSize as LayoutSheetSize, SHEET_CONSTANTS } from '@/constants/stickerSheetLayouts';
 
 
 const { width: screenWidth } = Dimensions.get('window');
 
-// Printful kiss-cut sticker sheet specifications
-// Based on Printful's requirements for seamless fulfillment
-const PRINTFUL_SHEET_CONFIG = {
-  // Kiss-cut sticker sheet dimensions (standard sizes)
-  SHEET_SIZES: {
-    '3x3': { WIDTH_INCHES: 3, HEIGHT_INCHES: 3, name: '3"×3"', cellsPerSide: 9, totalMinis: 81 },
-    '4x4': { WIDTH_INCHES: 4, HEIGHT_INCHES: 4, name: '4"×4"', cellsPerSide: 12, totalMinis: 144 },
-    '5.5x5.5': { WIDTH_INCHES: 5.5, HEIGHT_INCHES: 5.5, name: '5.5"×5.5"', cellsPerSide: 17, totalMinis: 289 },
-  },
-  // High resolution for print quality
-  DPI: 300,
-  // Safe area margins (minimum distance from edges) - reduced for new spec
-  SAFE_MARGIN_INCHES: 0.125,
-  // Bleed area for kiss-cut (extends beyond cut line)
-  BLEED_INCHES: 0.06,
-  // Minimum spacing between stickers for clean cuts
-  MIN_STICKER_SPACING_INCHES: 0.06,
-};
+type SheetSize = '3x3' | '4x4' | '5x5';
 
-type SheetSize = '3x3' | '4x4' | '5.5x5.5';
-
-function getSheetConfig(sheetSize: SheetSize) {
-  const sheet = PRINTFUL_SHEET_CONFIG.SHEET_SIZES[sheetSize];
-  return {
-    ...sheet,
-    WIDTH_PIXELS: sheet.WIDTH_INCHES * PRINTFUL_SHEET_CONFIG.DPI,
-    HEIGHT_PIXELS: sheet.HEIGHT_INCHES * PRINTFUL_SHEET_CONFIG.DPI,
-    SAFE_MARGIN_PIXELS: PRINTFUL_SHEET_CONFIG.SAFE_MARGIN_INCHES * PRINTFUL_SHEET_CONFIG.DPI,
-    BLEED_PIXELS: PRINTFUL_SHEET_CONFIG.BLEED_INCHES * PRINTFUL_SHEET_CONFIG.DPI,
-    MIN_SPACING_PIXELS: PRINTFUL_SHEET_CONFIG.MIN_STICKER_SPACING_INCHES * PRINTFUL_SHEET_CONFIG.DPI,
-    PRINTABLE_WIDTH: (sheet.WIDTH_INCHES - 2 * PRINTFUL_SHEET_CONFIG.SAFE_MARGIN_INCHES) * PRINTFUL_SHEET_CONFIG.DPI,
-    PRINTABLE_HEIGHT: (sheet.HEIGHT_INCHES - 2 * PRINTFUL_SHEET_CONFIG.SAFE_MARGIN_INCHES) * PRINTFUL_SHEET_CONFIG.DPI,
-  };
-}
-
-// Canvas dimensions for UI (scaled down for mobile display)
-const CANVAS_SIZE = screenWidth - 48; // 24px padding on each side
-const CANVAS_ASPECT_RATIO = 1; // Square sheets
+const CANVAS_SIZE = screenWidth - 48;
+const CANVAS_ASPECT_RATIO = 1;
 const CANVAS_HEIGHT = CANVAS_SIZE * CANVAS_ASPECT_RATIO;
-
-// Sticker specifications
-const STICKER_SIZE_INCHES = 0.25; // Mini sticker size to match new spec
 const STICKER_OUTLINE_WIDTH = 2;
 
-// Helper function to get canvas dimensions for a specific sheet size
-function getCanvasDimensions(sheetSize: SheetSize) {
-  const sheet = PRINTFUL_SHEET_CONFIG.SHEET_SIZES[sheetSize];
-  const STICKER_SIZE_PIXELS = Math.floor((STICKER_SIZE_INCHES / sheet.WIDTH_INCHES) * CANVAS_SIZE);
-  const MIN_SPACING_PIXELS = Math.floor((PRINTFUL_SHEET_CONFIG.MIN_STICKER_SPACING_INCHES / sheet.WIDTH_INCHES) * CANVAS_SIZE);
-  const SAFE_MARGIN_CANVAS = Math.floor((PRINTFUL_SHEET_CONFIG.SAFE_MARGIN_INCHES / sheet.WIDTH_INCHES) * CANVAS_SIZE);
-  const PRINTABLE_CANVAS_WIDTH = CANVAS_SIZE - (SAFE_MARGIN_CANVAS * 2);
-  const PRINTABLE_CANVAS_HEIGHT = CANVAS_HEIGHT - (SAFE_MARGIN_CANVAS * 2);
+function getCanvasDimensions(sheetSize: SheetSize, stickerCount: number) {
+  const gridDims = calculateGridDimensions(sheetSize as LayoutSheetSize, stickerCount, CANVAS_SIZE);
   
   return {
-    STICKER_SIZE_PIXELS,
-    MIN_SPACING_PIXELS,
-    SAFE_MARGIN_CANVAS,
-    PRINTABLE_CANVAS_WIDTH,
-    PRINTABLE_CANVAS_HEIGHT,
-    MAX_STICKERS: sheet.totalMinis,
+    STICKER_SIZE_PIXELS: gridDims.stickerSizeCanvas,
+    MIN_SPACING_PIXELS: gridDims.gutterCanvas,
+    SAFE_MARGIN_CANVAS: gridDims.marginCanvas,
+    PRINTABLE_CANVAS_WIDTH: gridDims.usableWidth,
+    PRINTABLE_CANVAS_HEIGHT: gridDims.usableHeight,
+    MAX_STICKERS: stickerCount,
+    COLS: gridDims.cols,
+    ROWS: gridDims.rows,
   };
 }
 
@@ -101,21 +60,28 @@ interface StickerPosition {
 
 const StickerSheetScreen = memo(() => {
   const { savedStickers } = useUser();
+  const params = useLocalSearchParams();
+  const paramSheetSize = typeof params.sheetSize === 'string' ? params.sheetSize as SheetSize : '4x4';
+  const paramStickerCount = typeof params.stickerCount === 'string' ? parseInt(params.stickerCount, 10) : null;
+  
   const [selectedStickers, setSelectedStickers] = useState<StickerPosition[]>([]);
   const [isProcessing] = useState<boolean>(false);
   const [draggedSticker, setDraggedSticker] = useState<string | null>(null);
   const [isGeneratingSheet, setIsGeneratingSheet] = useState<boolean>(false);
   const [validationErrors, setValidationErrors] = useState<{ outOfBounds: string[]; colliding: string[] }>({ outOfBounds: [], colliding: [] });
-  const [currentSheetSize, setCurrentSheetSize] = useState<SheetSize>('4x4');
+  const [currentSheetSize] = useState<SheetSize>(paramSheetSize);
+  const [currentStickerCount] = useState<number>(() => {
+    const layout = STICKER_SHEET_LAYOUTS[paramSheetSize as LayoutSheetSize];
+    return paramStickerCount ?? layout.defaultOption.count;
+  });
   const animatedValues = useRef<{ [key: string]: { pan: Animated.ValueXY; scale: Animated.Value; opacity: Animated.Value; borderColor: Animated.Value } }>({});
   const panResponders = useRef<{ [key: string]: any }>({});
   const canvasRef = useRef<View>(null);
   const dragStartPosition = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const scrollViewRef = useRef<ScrollView>(null);
   
-  // Get current canvas dimensions based on selected sheet size
-  const canvasDims = useMemo(() => getCanvasDimensions(currentSheetSize), [currentSheetSize]);
-  const { STICKER_SIZE_PIXELS, MIN_SPACING_PIXELS, SAFE_MARGIN_CANVAS, PRINTABLE_CANVAS_WIDTH, PRINTABLE_CANVAS_HEIGHT, MAX_STICKERS } = canvasDims;
+  const canvasDims = useMemo(() => getCanvasDimensions(currentSheetSize, currentStickerCount), [currentSheetSize, currentStickerCount]);
+  const { STICKER_SIZE_PIXELS, MIN_SPACING_PIXELS, SAFE_MARGIN_CANVAS, PRINTABLE_CANVAS_WIDTH, PRINTABLE_CANVAS_HEIGHT, MAX_STICKERS, COLS, ROWS } = canvasDims;
 
   const initializeAnimatedValues = useCallback((stickerId: string, x?: number, y?: number) => {
     if (!animatedValues.current[stickerId]) {
@@ -130,7 +96,6 @@ const StickerSheetScreen = memo(() => {
     }
   }, []);
 
-  // Check if a sticker is within the safe area
   const isWithinBounds = useCallback((x: number, y: number): boolean => {
     return (
       x >= SAFE_MARGIN_CANVAS &&
@@ -138,57 +103,45 @@ const StickerSheetScreen = memo(() => {
       y >= SAFE_MARGIN_CANVAS &&
       y <= SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_HEIGHT - STICKER_SIZE_PIXELS
     );
-  }, []);
+  }, [SAFE_MARGIN_CANVAS, PRINTABLE_CANVAS_WIDTH, PRINTABLE_CANVAS_HEIGHT, STICKER_SIZE_PIXELS]);
 
-  // Check if two stickers are colliding
   const checkCollision = useCallback((x1: number, y1: number, x2: number, y2: number): boolean => {
     const distance = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
     return distance < STICKER_SIZE_PIXELS + MIN_SPACING_PIXELS;
-  }, []);
+  }, [STICKER_SIZE_PIXELS, MIN_SPACING_PIXELS]);
 
-  // Find a valid position that doesn't collide with other stickers
   const findValidPosition = useCallback((targetX: number, targetY: number, currentId: string): { x: number; y: number; isValid: boolean } => {
-    // First, constrain to bounds
     let x = Math.max(SAFE_MARGIN_CANVAS, Math.min(SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_WIDTH - STICKER_SIZE_PIXELS, targetX));
     let y = Math.max(SAFE_MARGIN_CANVAS, Math.min(SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_HEIGHT - STICKER_SIZE_PIXELS, targetY));
     
-    // Check for collisions with other stickers
     const otherStickers = selectedStickers.filter(s => s.id !== currentId);
-    let hasCollision = false;
     
     for (const other of otherStickers) {
       if (checkCollision(x, y, other.x, other.y)) {
-        hasCollision = true;
-        // Try to find a nearby valid position
         const angle = Math.atan2(y - other.y, x - other.x);
         const pushDistance = STICKER_SIZE_PIXELS + MIN_SPACING_PIXELS + 2;
         x = other.x + Math.cos(angle) * pushDistance;
         y = other.y + Math.sin(angle) * pushDistance;
         
-        // Re-constrain to bounds
         x = Math.max(SAFE_MARGIN_CANVAS, Math.min(SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_WIDTH - STICKER_SIZE_PIXELS, x));
         y = Math.max(SAFE_MARGIN_CANVAS, Math.min(SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_HEIGHT - STICKER_SIZE_PIXELS, y));
       }
     }
     
-    // Final validation
     const isValid = isWithinBounds(x, y) && !otherStickers.some(other => checkCollision(x, y, other.x, other.y));
     
     return { x, y, isValid };
-  }, [selectedStickers, isWithinBounds, checkCollision]);
+  }, [selectedStickers, isWithinBounds, checkCollision, SAFE_MARGIN_CANVAS, PRINTABLE_CANVAS_WIDTH, PRINTABLE_CANVAS_HEIGHT, STICKER_SIZE_PIXELS, MIN_SPACING_PIXELS]);
 
-  // Validate all sticker positions
   const validatePositions = useCallback(() => {
     const outOfBounds: string[] = [];
     const colliding: string[] = [];
     
     selectedStickers.forEach((sticker, index) => {
-      // Check bounds
       if (!isWithinBounds(sticker.x, sticker.y)) {
         outOfBounds.push(sticker.id);
       }
       
-      // Check collisions with other stickers
       for (let j = index + 1; j < selectedStickers.length; j++) {
         const other = selectedStickers[j];
         if (checkCollision(sticker.x, sticker.y, other.x, other.y)) {
@@ -200,7 +153,6 @@ const StickerSheetScreen = memo(() => {
     
     setValidationErrors({ outOfBounds, colliding });
     
-    // Update sticker states
     setSelectedStickers(prev => 
       prev.map(sticker => ({
         ...sticker,
@@ -209,7 +161,6 @@ const StickerSheetScreen = memo(() => {
       }))
     );
     
-    // Animate border colors for invalid stickers
     selectedStickers.forEach(sticker => {
       if (animatedValues.current[sticker.id]) {
         const isInvalid = outOfBounds.includes(sticker.id) || colliding.includes(sticker.id);
@@ -226,54 +177,20 @@ const StickerSheetScreen = memo(() => {
     if (selectedStickers.length === 0) return;
 
     console.log('[Auto-Arrange] Starting with', selectedStickers.length, 'stickers');
-    console.log('[Auto-Arrange] Sheet size:', currentSheetSize);
-    console.log('[Auto-Arrange] Canvas dimensions:', {
-      STICKER_SIZE_PIXELS,
-      MIN_SPACING_PIXELS,
-      SAFE_MARGIN_CANVAS,
-      PRINTABLE_CANVAS_WIDTH,
-      PRINTABLE_CANVAS_HEIGHT,
-    });
+    console.log('[Auto-Arrange] Sheet size:', currentSheetSize, 'Sticker count:', currentStickerCount);
 
-    // Calculate optimal grid layout based on the new spec
-    const count = selectedStickers.length;
-    const sheetConfig = PRINTFUL_SHEET_CONFIG.SHEET_SIZES[currentSheetSize];
+    const totalGridWidth = COLS * STICKER_SIZE_PIXELS + (COLS - 1) * MIN_SPACING_PIXELS;
+    const totalGridHeight = ROWS * STICKER_SIZE_PIXELS + (ROWS - 1) * MIN_SPACING_PIXELS;
     
-    // Use the spec's cell size and spacing
-    const cellSizeInches = 0.25;
-    const cellGapInches = 0.06;
-    const outerMarginInches = 0.125;
-    
-    // Calculate how many cells fit per side
-    const usableSideInches = sheetConfig.WIDTH_INCHES - (2 * outerMarginInches);
-    const cellsPerSide = Math.floor((usableSideInches + cellGapInches) / (cellSizeInches + cellGapInches));
-    
-    console.log('[Auto-Arrange] Calculated grid:', cellsPerSide, 'x', cellsPerSide, '=', cellsPerSide * cellsPerSide, 'cells');
-    
-    // Calculate actual pixel spacing on canvas
-    const cellSpacing = Math.floor((cellGapInches / sheetConfig.WIDTH_INCHES) * CANVAS_SIZE);
-    
-    // Calculate grid dimensions
-    const totalGridWidth = cellsPerSide * STICKER_SIZE_PIXELS + (cellsPerSide - 1) * cellSpacing;
-    const totalGridHeight = cellsPerSide * STICKER_SIZE_PIXELS + (cellsPerSide - 1) * cellSpacing;
-    
-    console.log('[Auto-Arrange] Grid dimensions:', totalGridWidth, 'x', totalGridHeight);
-    
-    // Center the grid in the printable area
     const startX = SAFE_MARGIN_CANVAS + Math.floor((PRINTABLE_CANVAS_WIDTH - totalGridWidth) / 2);
     const startY = SAFE_MARGIN_CANVAS + Math.floor((PRINTABLE_CANVAS_HEIGHT - totalGridHeight) / 2);
-    
-    console.log('[Auto-Arrange] Grid start position:', startX, ',', startY);
 
-    // Create new positions array following the grid
     const newPositions = selectedStickers.map((item, index) => {
-      const row = Math.floor(index / cellsPerSide);
-      const col = index % cellsPerSide;
+      const row = Math.floor(index / COLS);
+      const col = index % COLS;
       
-      const x = startX + col * (STICKER_SIZE_PIXELS + cellSpacing);
-      const y = startY + row * (STICKER_SIZE_PIXELS + cellSpacing);
-      
-      console.log(`[Auto-Arrange] Sticker ${index} at grid [${row},${col}] -> position (${x}, ${y})`);
+      const x = startX + col * (STICKER_SIZE_PIXELS + MIN_SPACING_PIXELS);
+      const y = startY + row * (STICKER_SIZE_PIXELS + MIN_SPACING_PIXELS);
       
       return {
         ...item,
@@ -285,45 +202,13 @@ const StickerSheetScreen = memo(() => {
       };
     });
     
-    // Verify no overlaps and all within bounds
-    let hasIssues = false;
-    for (let i = 0; i < newPositions.length; i++) {
-      // Check bounds
-      if (!isWithinBounds(newPositions[i].x, newPositions[i].y)) {
-        console.warn(`[Auto-Arrange] Sticker ${i} is out of bounds at (${newPositions[i].x}, ${newPositions[i].y})`);
-        newPositions[i].isOutOfBounds = true;
-        hasIssues = true;
-      }
-      
-      // Check collisions
-      for (let j = i + 1; j < newPositions.length; j++) {
-        if (checkCollision(newPositions[i].x, newPositions[i].y, newPositions[j].x, newPositions[j].y)) {
-          console.warn(`[Auto-Arrange] Stickers ${i} and ${j} are colliding`);
-          newPositions[i].isColliding = true;
-          newPositions[j].isColliding = true;
-          hasIssues = true;
-        }
-      }
-    }
-    
-    if (hasIssues) {
-      console.warn('[Auto-Arrange] Some stickers have issues after arrangement');
-    } else {
-      console.log('[Auto-Arrange] All stickers arranged successfully!');
-    }
-    
     setSelectedStickers(newPositions);
-    
-    // Clear validation errors after arranging
     setValidationErrors({ outOfBounds: [], colliding: [] });
-    
-    // Clear pan responders to reset drag state
     panResponders.current = {};
     animatedValues.current = {};
     
-    // Run validation after a short delay to ensure state is updated
     setTimeout(() => validatePositions(), 100);
-  }, [selectedStickers, currentSheetSize, STICKER_SIZE_PIXELS, MIN_SPACING_PIXELS, SAFE_MARGIN_CANVAS, PRINTABLE_CANVAS_WIDTH, PRINTABLE_CANVAS_HEIGHT, isWithinBounds, checkCollision, validatePositions]);
+  }, [selectedStickers, currentSheetSize, currentStickerCount, STICKER_SIZE_PIXELS, MIN_SPACING_PIXELS, SAFE_MARGIN_CANVAS, PRINTABLE_CANVAS_WIDTH, PRINTABLE_CANVAS_HEIGHT, COLS, ROWS, validatePositions]);
 
   const createPanResponder = useCallback((stickerId: string, currentX: number, currentY: number) => {
     initializeAnimatedValues(stickerId, currentX, currentY);
@@ -338,30 +223,17 @@ const StickerSheetScreen = memo(() => {
       onPanResponderTerminationRequest: () => false,
       onShouldBlockNativeResponder: () => true,
       onPanResponderGrant: (evt) => {
-        // Store the starting position of the sticker
         startX = currentX;
         startY = currentY;
-        
-        // Store the initial touch position
         initialTouchX = evt.nativeEvent.locationX;
         initialTouchY = evt.nativeEvent.locationY;
-        
         dragStartPosition.current = { x: currentX, y: currentY };
-        
-        // Immediate UI feedback
         setDraggedSticker(stickerId);
         
-        // Reset animated values for smooth dragging
         if (animatedValues.current[stickerId]) {
-          // Clear any previous offset
           animatedValues.current[stickerId].pan.flattenOffset();
-          // Set the starting position
-          animatedValues.current[stickerId].pan.setValue({ 
-            x: currentX, 
-            y: currentY 
-          });
+          animatedValues.current[stickerId].pan.setValue({ x: currentX, y: currentY });
           
-          // Instant scale and opacity change for better feedback
           Animated.parallel([
             Animated.timing(animatedValues.current[stickerId].scale, {
               toValue: 1.15,
@@ -377,25 +249,15 @@ const StickerSheetScreen = memo(() => {
         }
       },
       onPanResponderMove: (evt, gestureState) => {
-        // Calculate the new position based on gesture movement
         if (animatedValues.current[stickerId]) {
-          // Calculate position accounting for where the user touched the sticker
           const touchOffsetX = initialTouchX - (STICKER_SIZE_PIXELS / 2);
           const touchOffsetY = initialTouchY - (STICKER_SIZE_PIXELS / 2);
-          
-          // Use the starting position plus the gesture delta minus the touch offset
           const newX = startX + gestureState.dx - touchOffsetX;
           const newY = startY + gestureState.dy - touchOffsetY;
           
-          animatedValues.current[stickerId].pan.setValue({
-            x: newX,
-            y: newY,
-          });
+          animatedValues.current[stickerId].pan.setValue({ x: newX, y: newY });
           
-          // Check bounds for visual feedback
           const inBounds = isWithinBounds(newX, newY);
-          
-          // Update border color immediately for visual feedback
           Animated.timing(animatedValues.current[stickerId].borderColor, {
             toValue: !inBounds ? 1 : 0,
             duration: 0,
@@ -406,20 +268,16 @@ const StickerSheetScreen = memo(() => {
       onPanResponderRelease: (_, gestureState) => {
         setDraggedSticker(null);
         
-        // Calculate final position accounting for touch offset
         const touchOffsetX = initialTouchX - (STICKER_SIZE_PIXELS / 2);
         const touchOffsetY = initialTouchY - (STICKER_SIZE_PIXELS / 2);
         const targetX = startX + gestureState.dx - touchOffsetX;
         const targetY = startY + gestureState.dy - touchOffsetY;
         
-        // Find valid position (with collision detection)
         const { x: finalX, y: finalY, isValid } = findValidPosition(targetX, targetY, stickerId);
         
-        // Immediately update the state to prevent rubber banding
         setSelectedStickers(prev => {
           const updated = prev.map(item => {
             if (item.id === stickerId) {
-              // Clear old pan responder to force recreation with new position
               delete panResponders.current[stickerId];
               return { 
                 ...item, 
@@ -434,12 +292,9 @@ const StickerSheetScreen = memo(() => {
           return updated;
         });
         
-        // Animate to final position without spring to avoid rubber banding
         if (animatedValues.current[stickerId]) {
-          // Set the final position immediately to prevent visual jump
           animatedValues.current[stickerId].pan.setValue({ x: finalX, y: finalY });
           
-          // Animate scale and opacity back to normal
           Animated.parallel([
             Animated.timing(animatedValues.current[stickerId].scale, {
               toValue: 1,
@@ -459,112 +314,59 @@ const StickerSheetScreen = memo(() => {
           ]).start();
         }
         
-        // Validate positions after update
         setTimeout(() => validatePositions(), 100);
       },
     });
-  }, [initializeAnimatedValues, isWithinBounds, validatePositions, findValidPosition]);
+  }, [initializeAnimatedValues, isWithinBounds, validatePositions, findValidPosition, STICKER_SIZE_PIXELS]);
 
   const addStickerToSheet = useCallback((sticker: SavedSticker) => {
-    console.log('Adding sticker to sheet. Current count:', selectedStickers.length);
-    console.log('MAX_STICKERS:', MAX_STICKERS);
-    
     if (selectedStickers.length >= MAX_STICKERS) {
       Alert.alert('Maximum Reached', `You can add up to ${MAX_STICKERS} stickers per sheet.`);
       return;
     }
 
-    // Smart placement algorithm - try to find the best position
     let x = 0;
     let y = 0;
     let positionFound = false;
     
-    // Calculate optimal grid for current stickers + 1
     const targetCount = selectedStickers.length + 1;
-    console.log('Target count for grid:', targetCount);
-    
-    // Better grid calculation for small numbers
-    let cols = 1;
-    let rows = 1;
-    
-    if (targetCount <= 4) {
-      // For 1-4 stickers, use a single row
-      cols = Math.min(4, targetCount);
-      rows = 1;
-    } else if (targetCount <= 8) {
-      // For 5-8 stickers, use 2 rows
-      cols = 4;
-      rows = Math.ceil(targetCount / 4);
-    } else if (targetCount <= 12) {
-      // For 9-12 stickers, use 3 rows
-      cols = 4;
-      rows = Math.ceil(targetCount / 4);
-    } else if (targetCount <= 18) {
-      // For 13-18 stickers, use up to 6 columns
-      cols = 6;
-      rows = Math.ceil(targetCount / 6);
-    } else {
-      // For 19-24 stickers
-      cols = 6;
-      rows = Math.ceil(targetCount / cols);
-    }
-    
-    console.log('Grid layout - cols:', cols, 'rows:', rows);
+    let cols = Math.min(COLS, targetCount);
+    let rows = Math.ceil(targetCount / cols);
     
     const spacingX = STICKER_SIZE_PIXELS + MIN_SPACING_PIXELS + 10;
     const spacingY = STICKER_SIZE_PIXELS + MIN_SPACING_PIXELS + 10;
     
-    // Calculate total grid dimensions
     const totalWidth = cols * STICKER_SIZE_PIXELS + (cols - 1) * (MIN_SPACING_PIXELS + 10);
     const totalHeight = rows * STICKER_SIZE_PIXELS + (rows - 1) * (MIN_SPACING_PIXELS + 10);
     
-    console.log('Total grid dimensions - width:', totalWidth, 'height:', totalHeight);
-    console.log('Printable area - width:', PRINTABLE_CANVAS_WIDTH, 'height:', PRINTABLE_CANVAS_HEIGHT);
-    
-    // Center the grid
     const startX = SAFE_MARGIN_CANVAS + Math.max(0, Math.floor((PRINTABLE_CANVAS_WIDTH - totalWidth) / 2));
     const startY = SAFE_MARGIN_CANVAS + Math.max(0, Math.floor((PRINTABLE_CANVAS_HEIGHT - totalHeight) / 2));
     
-    console.log('Grid start position - x:', startX, 'y:', startY);
-    
-    // Try to find the next available grid position
     const gridPositions: { x: number; y: number }[] = [];
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         const gridX = startX + col * spacingX;
         const gridY = startY + row * spacingY;
-        console.log(`Grid position [${row},${col}] - x:${gridX}, y:${gridY}`);
         if (isWithinBounds(gridX, gridY)) {
           gridPositions.push({ x: gridX, y: gridY });
-          console.log('Position is within bounds');
-        } else {
-          console.log('Position is OUT OF BOUNDS');
         }
       }
     }
     
-    console.log('Total valid grid positions:', gridPositions.length);
-    
-    // Find first unoccupied grid position
     for (const pos of gridPositions) {
       const hasCollision = selectedStickers.some(existing => 
         checkCollision(pos.x, pos.y, existing.x, existing.y)
       );
       
-      console.log(`Checking position x:${pos.x}, y:${pos.y} - collision:${hasCollision}`);
-      
       if (!hasCollision) {
         x = pos.x;
         y = pos.y;
         positionFound = true;
-        console.log('Found valid position!');
         break;
       }
     }
     
-    // If no grid position available, find any valid spot
     if (!positionFound) {
-      // Scan for empty space with smaller steps
       const step = 20;
       for (let testY = SAFE_MARGIN_CANVAS; testY <= SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_HEIGHT - STICKER_SIZE_PIXELS && !positionFound; testY += step) {
         for (let testX = SAFE_MARGIN_CANVAS; testX <= SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_WIDTH - STICKER_SIZE_PIXELS && !positionFound; testX += step) {
@@ -581,9 +383,7 @@ const StickerSheetScreen = memo(() => {
       }
     }
     
-    // If still no position, auto-arrange with the new sticker
     if (!positionFound) {
-      // Add the sticker temporarily and auto-arrange
       const tempPosition: StickerPosition = {
         id: `${sticker.id}-${Date.now()}-${Math.random()}`,
         x: SAFE_MARGIN_CANVAS,
@@ -596,7 +396,6 @@ const StickerSheetScreen = memo(() => {
       };
       setSelectedStickers(prev => {
         const newList = [...prev, tempPosition];
-        // Auto-arrange immediately
         setTimeout(() => arrangeStickersNeatly(), 50);
         return newList;
       });
@@ -604,7 +403,7 @@ const StickerSheetScreen = memo(() => {
     }
     
     const newPosition: StickerPosition = {
-      id: `${sticker.id}-${Date.now()}-${Math.random()}`, // Ensure uniqueness for multiple same stickers
+      id: `${sticker.id}-${Date.now()}-${Math.random()}`,
       x,
       y,
       rotation: 0,
@@ -613,25 +412,14 @@ const StickerSheetScreen = memo(() => {
       isOutOfBounds: false,
       isColliding: false,
     };
-
-    console.log('Adding new sticker at position:', { x, y });
-    console.log('New sticker ID:', newPosition.id);
     
-    setSelectedStickers(prev => {
-      const updated = [...prev, newPosition];
-      console.log('Updated stickers count:', updated.length);
-      return updated;
-    });
-    
-    // Validate positions after adding
+    setSelectedStickers(prev => [...prev, newPosition]);
     setTimeout(() => validatePositions(), 100);
-  }, [selectedStickers, isWithinBounds, checkCollision, validatePositions, arrangeStickersNeatly]);
+  }, [selectedStickers, isWithinBounds, checkCollision, validatePositions, arrangeStickersNeatly, MAX_STICKERS, COLS, STICKER_SIZE_PIXELS, MIN_SPACING_PIXELS, SAFE_MARGIN_CANVAS, PRINTABLE_CANVAS_WIDTH, PRINTABLE_CANVAS_HEIGHT]);
 
   const removeStickerFromSheet = useCallback((positionId: string) => {
     setSelectedStickers(prev => {
-      // Update pan responders when position changes
       const updatedStickers = prev.filter(item => item.id !== positionId);
-      // Clear the pan responder for removed sticker
       delete panResponders.current[positionId];
       delete animatedValues.current[positionId];
       return updatedStickers;
@@ -648,8 +436,6 @@ const StickerSheetScreen = memo(() => {
       )
     );
   }, []);
-
-
 
   const clearSheet = useCallback(() => {
     Alert.alert(
@@ -676,10 +462,10 @@ const StickerSheetScreen = memo(() => {
         return;
       }
 
-      const sheetConfig = getSheetConfig(currentSheetSize);
+      const layout = STICKER_SHEET_LAYOUTS[currentSheetSize as LayoutSheetSize];
       const canvas = document.createElement('canvas');
-      canvas.width = sheetConfig.WIDTH_PIXELS;
-      canvas.height = sheetConfig.HEIGHT_PIXELS;
+      canvas.width = layout.sheetSizePixels;
+      canvas.height = layout.sheetSizePixels;
       const ctx = canvas.getContext('2d');
       
       if (!ctx) {
@@ -687,7 +473,6 @@ const StickerSheetScreen = memo(() => {
         return;
       }
 
-      // Set white background
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -699,31 +484,18 @@ const StickerSheetScreen = memo(() => {
         return;
       }
 
-      // Calculate scale factor from canvas to printful dimensions
-      const scaleX = sheetConfig.WIDTH_PIXELS / CANVAS_SIZE;
-      const scaleY = sheetConfig.HEIGHT_PIXELS / CANVAS_HEIGHT;
+      const scaleX = layout.sheetSizePixels / CANVAS_SIZE;
+      const scaleY = layout.sheetSizePixels / CANVAS_HEIGHT;
       
-      // Draw safe area guidelines (light gray background)
       ctx.fillStyle = '#f8f9fa';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // Draw printable area (white background)
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(
-        sheetConfig.SAFE_MARGIN_PIXELS,
-        sheetConfig.SAFE_MARGIN_PIXELS,
-        sheetConfig.PRINTABLE_WIDTH,
-        sheetConfig.PRINTABLE_HEIGHT
-      );
-      
-      // Add subtle border for printable area
-      ctx.strokeStyle = '#e5e7eb';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(
-        sheetConfig.SAFE_MARGIN_PIXELS,
-        sheetConfig.SAFE_MARGIN_PIXELS,
-        sheetConfig.PRINTABLE_WIDTH,
-        sheetConfig.PRINTABLE_HEIGHT
+        SHEET_CONSTANTS.OUTER_MARGIN_PIXELS,
+        SHEET_CONSTANTS.OUTER_MARGIN_PIXELS,
+        layout.sheetSizePixels - 2 * SHEET_CONSTANTS.OUTER_MARGIN_PIXELS,
+        layout.sheetSizePixels - 2 * SHEET_CONSTANTS.OUTER_MARGIN_PIXELS
       );
       
       selectedStickers.forEach((stickerPos) => {
@@ -731,32 +503,15 @@ const StickerSheetScreen = memo(() => {
         img.crossOrigin = 'anonymous';
         
         img.onload = () => {
-          // Calculate position and size in high-res coordinates
           const x = stickerPos.x * scaleX;
           const y = stickerPos.y * scaleY;
           const width = STICKER_SIZE_PIXELS * scaleX;
           const height = STICKER_SIZE_PIXELS * scaleY;
           
-          // Add bleed area for kiss-cut stickers
-          const bleedWidth = width + (sheetConfig.BLEED_PIXELS * 2);
-          const bleedHeight = height + (sheetConfig.BLEED_PIXELS * 2);
-          
-          // Save context for rotation
           ctx.save();
-          
-          // Move to center of sticker for rotation
           ctx.translate(x + width / 2, y + height / 2);
           ctx.rotate((stickerPos.rotation * Math.PI) / 180);
-          
-          // Draw image with bleed area for proper kiss-cut
-          ctx.drawImage(img, -bleedWidth / 2, -bleedHeight / 2, bleedWidth, bleedHeight);
-          
-          // Add subtle cut line indicator (very light, won't affect print)
-          ctx.strokeStyle = 'rgba(0,0,0,0.05)';
-          ctx.lineWidth = 1;
-          ctx.strokeRect(-width / 2, -height / 2, width, height);
-          
-          // Restore context
+          ctx.drawImage(img, -width / 2, -height / 2, width, height);
           ctx.restore();
           
           loadedImages++;
@@ -784,16 +539,14 @@ const StickerSheetScreen = memo(() => {
     }
 
     try {
-      const sheetConfig = getSheetConfig(currentSheetSize);
-      // Capture the current canvas view
+      const layout = STICKER_SHEET_LAYOUTS[currentSheetSize as LayoutSheetSize];
       const uri = await captureRef(canvasRef.current, {
         format: 'png',
         quality: 1.0,
-        width: sheetConfig.WIDTH_PIXELS,
-        height: sheetConfig.HEIGHT_PIXELS,
+        width: layout.sheetSizePixels,
+        height: layout.sheetSizePixels,
       });
 
-      // Read the file and convert to base64
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
@@ -807,13 +560,9 @@ const StickerSheetScreen = memo(() => {
 
   const generateStickerSheetImage = useCallback(async (): Promise<string> => {
     try {
-      console.log('Generating sticker sheet composite image...');
-      
       if (Platform.OS === 'web') {
-        // Web implementation using Canvas API
         return await generateStickerSheetWeb();
       } else {
-        // Mobile implementation using react-native-view-shot
         return await generateStickerSheetMobile();
       }
     } catch (error) {
@@ -828,7 +577,6 @@ const StickerSheetScreen = memo(() => {
       return;
     }
     
-    // Check for validation errors
     if (validationErrors.outOfBounds.length > 0 || validationErrors.colliding.length > 0) {
       Alert.alert(
         'Invalid Sticker Positions',
@@ -850,14 +598,8 @@ const StickerSheetScreen = memo(() => {
     setIsGeneratingSheet(true);
     
     try {
-      console.log('Generating high-resolution sticker sheet for Printful...');
-      
-      // Generate the composite sticker sheet image
       const stickerSheetImage = await generateStickerSheetImage();
       
-      console.log('Sticker sheet generated successfully');
-      
-      // Navigate to checkout with the generated image
       router.push({
         pathname: '/checkout',
         params: {
@@ -865,8 +607,8 @@ const StickerSheetScreen = memo(() => {
           finalStickers: stickerSheetImage,
           isReorder: 'false',
           isStickerSheet: 'true',
-          stickerCount: selectedStickers.length.toString(),
-          sheetSize: '4x4',
+          stickerCount: currentStickerCount.toString(),
+          sheetSize: currentSheetSize,
           isMultiStickerSheet: 'false',
         },
       });
@@ -880,7 +622,7 @@ const StickerSheetScreen = memo(() => {
     } finally {
       setIsGeneratingSheet(false);
     }
-  }, [selectedStickers, validationErrors, arrangeStickersNeatly, generateStickerSheetImage]);
+  }, [selectedStickers, validationErrors, arrangeStickersNeatly, generateStickerSheetImage, currentStickerCount, currentSheetSize]);
 
   useEffect(() => {
     selectedStickers.forEach((item) => {
@@ -947,10 +689,10 @@ const StickerSheetScreen = memo(() => {
             <View style={styles.canvasContainer}>
               <View style={styles.canvasTitleContainer}>
                 <Text style={styles.canvasTitle}>
-                  {PRINTFUL_SHEET_CONFIG.SHEET_SIZES[currentSheetSize].name} Kiss-Cut Sheet
+                  {STICKER_SHEET_LAYOUTS[currentSheetSize as LayoutSheetSize].displayName} Kiss-Cut Sheet
                 </Text>
                 <Text style={styles.canvasSubtitle}>
-                  {selectedStickers.length}/{MAX_STICKERS} mini stickers (0.25&quot; × 0.25&quot;) • Print-ready format
+                  {selectedStickers.length}/{MAX_STICKERS} stickers • {COLS}×{ROWS} grid • Print-ready format
                 </Text>
               </View>
               <View 
@@ -997,7 +739,6 @@ const StickerSheetScreen = memo(() => {
                       pointerEvents="box-only"
                       testID={`sticker-${item.id}`}
                     >
-                      {/* Kiss-cut sticker with bleed area */}
                       <Animated.View style={[
                         styles.stickerOutline,
                         draggedSticker === item.id && styles.stickerOutlineDragging,
@@ -1008,14 +749,12 @@ const StickerSheetScreen = memo(() => {
                           source={{ uri: item.sticker.stickerImage }}
                           style={styles.canvasStickerImage}
                         />
-                        {/* Cut line indicator */}
                         <View style={[
                           styles.cutLineIndicator,
                           (item.isOutOfBounds || item.isColliding) && styles.cutLineError
                         ]} />
                       </Animated.View>
                       
-                      {/* Selection and error indicators */}
                       {draggedSticker === item.id && (
                         <View style={[
                           styles.selectionIndicator,
@@ -1023,7 +762,6 @@ const StickerSheetScreen = memo(() => {
                         ]} />
                       )}
                       
-                      {/* Error badge */}
                       {(item.isOutOfBounds || item.isColliding) && draggedSticker !== item.id && (
                         <View style={styles.errorBadge}>
                           <Text style={styles.errorBadgeText}>!</Text>
@@ -1033,7 +771,6 @@ const StickerSheetScreen = memo(() => {
                   );
                 })}
                 
-                {/* Floating action menu for selected sticker */}
                 {draggedSticker && (
                   <View style={styles.floatingControls}>
                     <TouchableOpacity
@@ -1053,7 +790,6 @@ const StickerSheetScreen = memo(() => {
                   </View>
                 )}
                 
-                {/* Safe area guidelines */}
                 <View style={[
                   styles.safeAreaGuide,
                   {
@@ -1078,7 +814,6 @@ const StickerSheetScreen = memo(() => {
                   </View>
                 )}
                 
-                {/* Validation status */}
                 {(validationErrors.outOfBounds.length > 0 || validationErrors.colliding.length > 0) && (
                   <View style={styles.validationWarning}>
                     <Text style={styles.validationWarningText}>
@@ -1109,7 +844,7 @@ const StickerSheetScreen = memo(() => {
                 <View>
                   <Text style={styles.libraryTitle}>Your Memory Collection</Text>
                   <Text style={styles.librarySubtitle}>
-                    Tap to add • {PRINTFUL_SHEET_CONFIG.SHEET_SIZES[currentSheetSize].name} format • Up to {MAX_STICKERS} mini stickers
+                    Tap to add • {STICKER_SHEET_LAYOUTS[currentSheetSize as LayoutSheetSize].displayName} format • Up to {MAX_STICKERS} stickers
                   </Text>
                 </View>
                 <View style={styles.counterBadge}>
@@ -1183,7 +918,7 @@ const StickerSheetScreen = memo(() => {
                 <View style={styles.checkoutButtonContent}>
                   <ShoppingCart size={20} color={neutralColors.white} />
                   <Text style={styles.checkoutButtonText}>
-                    Order {PRINTFUL_SHEET_CONFIG.SHEET_SIZES[currentSheetSize].name} Sheet (${PRINTFUL_PRODUCTS.KISS_CUT_STICKER_SHEET.variants[currentSheetSize].price.toFixed(2)})
+                    Order {STICKER_SHEET_LAYOUTS[currentSheetSize as LayoutSheetSize].displayName} Sheet ({currentStickerCount} stickers)
                   </Text>
                   <Download size={16} color={neutralColors.white} />
                 </View>
@@ -1513,7 +1248,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   libraryStickerCard: {
-    width: (screenWidth - 60) / 3, // 3 columns with gaps
+    width: (screenWidth - 60) / 3,
     aspectRatio: 1,
     position: 'relative',
   },
