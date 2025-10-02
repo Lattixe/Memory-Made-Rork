@@ -32,7 +32,7 @@ export default function ZoomableImage({
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
 
   const containerWidth = useMemo(() => fullScreen ? screenWidth : Math.max(0, screenWidth - 96), [screenWidth, fullScreen]);
-  const containerHeight = useMemo(() => fullScreen ? screenHeight * 0.7 : 350, [screenHeight, fullScreen]);
+  const containerHeight = useMemo(() => fullScreen ? screenHeight : 350, [screenHeight, fullScreen]);
 
   const handleSingleTap = useCallback(() => {
     if (onPress) onPress();
