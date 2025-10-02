@@ -38,7 +38,7 @@ type ImageEditResponse = {
 
 
 export default function UploadScreen() {
-  const { user, savedStickers, isLoading, login, signup, logout, deleteSticker } = useUser();
+  const { user, savedStickers, isLoading, login, signup, logout, deleteSticker, saveSticker } = useUser();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [showGallery, setShowGallery] = useState<boolean>(false);
@@ -441,6 +441,14 @@ export default function UploadScreen() {
       
       const generatedImageUri = `data:${data.image.mimeType};base64,${cleanedBase64}`;
       
+      // Save generated sticker to library immediately
+      try {
+        await saveSticker(generatedImageUri, generatedImageUri, `Custom: ${promptText.trim().substring(0, 50)}${promptText.trim().length > 50 ? '...' : ''}`);
+        console.log('Generated sticker saved to library');
+      } catch (error) {
+        console.error('Error saving generated sticker:', error);
+      }
+      
       // Navigate immediately for better UX
       setIsNavigating(true);
       router.push({
@@ -515,9 +523,19 @@ export default function UploadScreen() {
           const data = await processImageWithRetry(base64Data);
           console.log('AI processing complete!');
 
+          const generatedStickerUri = `data:${data.image.mimeType};base64,${data.image.base64Data}`;
+          
+          // Save generated sticker to library immediately
+          try {
+            await saveSticker(selectedImage, generatedStickerUri, 'Memory Sticker');
+            console.log('Generated sticker saved to library');
+          } catch (error) {
+            console.error('Error saving generated sticker:', error);
+          }
+
           // Update the review screen with processed data
           router.setParams({
-            generatedStickers: `data:${data.image.mimeType};base64,${data.image.base64Data}`,
+            generatedStickers: generatedStickerUri,
             isProcessing: 'false',
           });
         } catch (error: any) {
