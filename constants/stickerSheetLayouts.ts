@@ -113,14 +113,6 @@ const SHEET_4X4_OPTIONS: StickerCountOption[] = [
       description: '4×4 grid • ~0.88" per sticker',
     };
   })(),
-  {
-    count: 24,
-    grid: [6, 4] as [number, number],
-    stickerSizeInches: calculateStickerSize(4.0, 6).sizeInches,
-    stickerSizePixels: calculateStickerSize(4.0, 6).sizePixels,
-    displayName: '24-Pack',
-    description: '6×4 grid • ~0.56" per sticker',
-  },
 ];
 
 // 5" × 5" sheet options (U = 4.75")
