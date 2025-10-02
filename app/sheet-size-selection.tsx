@@ -7,11 +7,12 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Grid3X3, Check, Layers } from 'lucide-react-native';
 import { neutralColors } from '@/constants/colors';
-import { STICKER_SHEET_LAYOUTS, SheetSize as LayoutSheetSize } from '@/constants/stickerSheetLayouts';
+import { STICKER_SHEET_LAYOUTS, SHEET_CONSTANTS, SheetSize as LayoutSheetSize } from '@/constants/stickerSheetLayouts';
 import { router, useLocalSearchParams } from 'expo-router';
 
 type SheetSize = '3x3' | '4x4' | '5x5';
@@ -80,20 +81,123 @@ export default function SheetSizeSelectionScreen() {
         throw new Error('Invalid sticker count selected');
       }
 
+      console.log('[Sheet Generation] Creating sheet with:', {
+        size: selectedSize,
+        count: currentStickerCount,
+        grid: stickerOption.grid,
+      });
+
+      // Generate the sheet image with the single sticker repeated
+      const sheetImageBase64 = await generateRepeatedStickerSheet(
+        stickerImage,
+        selectedSize,
+        currentStickerCount,
+        stickerOption.grid
+      );
+
+      console.log('[Sheet Generation] Sheet generated, navigating to checkout');
+
+      // Navigate directly to checkout with the generated sheet
       router.push({
-        pathname: '/sticker-sheet',
+        pathname: '/checkout',
         params: {
-          stickerImage,
-          originalImage,
-          sheetSize: selectedSize,
+          originalImage: originalImage || stickerImage,
+          finalStickers: sheetImageBase64,
+          isReorder: 'false',
+          isStickerSheet: 'true',
           stickerCount: currentStickerCount.toString(),
+          sheetSize: selectedSize,
+          isMultiStickerSheet: 'false',
         },
       });
     } catch (error) {
-      console.error('Error preparing sheet:', error);
-      Alert.alert('Error', 'Failed to prepare sticker sheet. Please try again.');
+      console.error('Error generating sheet:', error);
+      Alert.alert('Error', 'Failed to generate sticker sheet. Please try again.');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const generateRepeatedStickerSheet = async (
+    stickerImageUri: string,
+    sheetSize: SheetSize,
+    stickerCount: number,
+    grid: [number, number]
+  ): Promise<string> => {
+    const layout = STICKER_SHEET_LAYOUTS[sheetSize as LayoutSheetSize];
+    const [cols, rows] = grid;
+
+    if (Platform.OS === 'web') {
+      return new Promise((resolve, reject) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = layout.sheetSizePixels;
+        canvas.height = layout.sheetSizePixels;
+        const ctx = canvas.getContext('2d');
+        
+        if (!ctx) {
+          reject(new Error('Could not get canvas context'));
+          return;
+        }
+
+        // Fill background
+        ctx.fillStyle = '#f8f9fa';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw printable area
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(
+          SHEET_CONSTANTS.OUTER_MARGIN_PIXELS,
+          SHEET_CONSTANTS.OUTER_MARGIN_PIXELS,
+          layout.sheetSizePixels - 2 * SHEET_CONSTANTS.OUTER_MARGIN_PIXELS,
+          layout.sheetSizePixels - 2 * SHEET_CONSTANTS.OUTER_MARGIN_PIXELS
+        );
+
+        const img = new (window as any).Image();
+        img.crossOrigin = 'anonymous';
+        
+        img.onload = () => {
+          const stickerOption = layout.options.find(opt => opt.count === stickerCount);
+          if (!stickerOption) {
+            reject(new Error('Invalid sticker count'));
+            return;
+          }
+
+          const stickerSizePixels = stickerOption.stickerSizePixels;
+          const gutterPixels = SHEET_CONSTANTS.GUTTER_PIXELS;
+          const marginPixels = SHEET_CONSTANTS.OUTER_MARGIN_PIXELS;
+
+          const totalGridWidth = cols * stickerSizePixels + (cols - 1) * gutterPixels;
+          const totalGridHeight = rows * stickerSizePixels + (rows - 1) * gutterPixels;
+          const usableWidth = layout.sheetSizePixels - 2 * marginPixels;
+          const usableHeight = layout.sheetSizePixels - 2 * marginPixels;
+          
+          const startX = marginPixels + Math.max(0, (usableWidth - totalGridWidth) / 2);
+          const startY = marginPixels + Math.max(0, (usableHeight - totalGridHeight) / 2);
+
+          let drawn = 0;
+          for (let row = 0; row < rows && drawn < stickerCount; row++) {
+            for (let col = 0; col < cols && drawn < stickerCount; col++) {
+              const x = startX + col * (stickerSizePixels + gutterPixels);
+              const y = startY + row * (stickerSizePixels + gutterPixels);
+              
+              ctx.drawImage(img, x, y, stickerSizePixels, stickerSizePixels);
+              drawn++;
+            }
+          }
+          
+          resolve(canvas.toDataURL('image/png'));
+        };
+        
+        img.onerror = () => {
+          reject(new Error('Failed to load sticker image'));
+        };
+        
+        img.src = stickerImageUri;
+      });
+    } else {
+      // For mobile, we'll need to use a different approach
+      // For now, return the original image and handle it in checkout
+      return stickerImageUri;
     }
   };
 
