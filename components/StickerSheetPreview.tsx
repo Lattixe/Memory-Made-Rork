@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { neutralColors } from '@/constants/colors';
 import { STICKER_SHEET_LAYOUTS, getStickerOption, SheetSize } from '@/constants/stickerSheetLayouts';
 
@@ -17,13 +17,6 @@ export default function StickerSheetPreview({
   const layout = STICKER_SHEET_LAYOUTS[sheetSize];
   const stickerOption = getStickerOption(sheetSize, stickerCount);
   
-  const gridItems = useMemo(() => {
-    if (!stickerOption) return [];
-    const [cols, rows] = stickerOption.grid;
-    const totalCells = cols * rows;
-    return Array.from({ length: totalCells }, (_, i) => i);
-  }, [stickerOption]);
-  
   if (!stickerOption) {
     return (
       <View style={styles.container}>
@@ -32,7 +25,7 @@ export default function StickerSheetPreview({
     );
   }
 
-  const [cols, rows] = stickerOption.grid;
+  const [cols] = stickerOption.grid;
 
   return (
     <View style={styles.container}>
@@ -43,42 +36,36 @@ export default function StickerSheetPreview({
         </Text>
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.sheetContainer}>
-          <View style={styles.sheetBorder}>
-            <View
-              style={[
-                styles.grid,
-                {
-                  aspectRatio: 1,
-                },
-              ]}
-            >
-              {gridItems.map((index) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.gridCell,
-                    {
-                      width: `${100 / cols}%`,
-                      aspectRatio: 1,
-                    },
-                  ]}
-                >
-                  <View style={styles.miniStickerContainer}>
-                    <Image
-                      source={{ uri: stickerImage }}
-                      style={styles.miniSticker}
-                      resizeMode="contain"
-                    />
-                  </View>
+      <View style={styles.previewContainer}>
+        <View style={styles.sheetBorder}>
+          <View
+            style={[
+              styles.grid,
+              {
+                aspectRatio: 1,
+              },
+            ]}
+          >
+            {Array.from({ length: stickerCount }, (_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.gridCell,
+                  {
+                    width: `${100 / cols}%`,
+                    aspectRatio: 1,
+                  },
+                ]}
+              >
+                <View style={styles.miniStickerContainer}>
+                  <Image
+                    source={{ uri: stickerImage }}
+                    style={styles.miniSticker}
+                    resizeMode="contain"
+                  />
                 </View>
-              ))}
-            </View>
+              </View>
+            ))}
           </View>
         </View>
 
@@ -104,58 +91,10 @@ export default function StickerSheetPreview({
                   Each sticker peels off independently
                 </Text>
               </View>
-              <View style={styles.infoItem}>
-                <Text style={styles.infoBullet}>✓</Text>
-                <Text style={styles.infoText}>
-                  White border around each mini sticker
-                </Text>
-              </View>
-              <View style={styles.infoItem}>
-                <Text style={styles.infoBullet}>✓</Text>
-                <Text style={styles.infoText}>
-                  High-quality 300 DPI print on premium vinyl
-                </Text>
-              </View>
-              <View style={styles.infoItem}>
-                <Text style={styles.infoBullet}>✓</Text>
-                <Text style={styles.infoText}>
-                  Waterproof and durable for planners & journals
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.specsCard}>
-            <Text style={styles.specsTitle}>Technical Specifications:</Text>
-            <View style={styles.specRow}>
-              <Text style={styles.specLabel}>Sheet Size:</Text>
-              <Text style={styles.specValue}>{layout.displayName}</Text>
-            </View>
-            <View style={styles.specRow}>
-              <Text style={styles.specLabel}>Grid Layout:</Text>
-              <Text style={styles.specValue}>
-                {cols} × {rows}
-              </Text>
-            </View>
-            <View style={styles.specRow}>
-              <Text style={styles.specLabel}>Sticker Size:</Text>
-              <Text style={styles.specValue}>{stickerOption.stickerSizeInches.toFixed(2)}&quot; × {stickerOption.stickerSizeInches.toFixed(2)}&quot;</Text>
-            </View>
-            <View style={styles.specRow}>
-              <Text style={styles.specLabel}>Total Stickers:</Text>
-              <Text style={styles.specValue}>{stickerCount}</Text>
-            </View>
-            <View style={styles.specRow}>
-              <Text style={styles.specLabel}>Print Quality:</Text>
-              <Text style={styles.specValue}>300 DPI</Text>
-            </View>
-            <View style={styles.specRow}>
-              <Text style={styles.specLabel}>Material:</Text>
-              <Text style={styles.specValue}>Premium Vinyl</Text>
             </View>
           </View>
         </View>
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -165,42 +104,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    backgroundColor: neutralColors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: neutralColors.border,
+    marginBottom: 16,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '700' as const,
+    fontSize: 16,
+    fontWeight: '600' as const,
     color: neutralColors.text.primary,
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: neutralColors.text.secondary,
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-  },
-  sheetContainer: {
-    marginBottom: 24,
+  previewContainer: {
+    gap: 16,
   },
   sheetBorder: {
     backgroundColor: neutralColors.white,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 2,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
     borderColor: neutralColors.border,
-    shadowColor: neutralColors.gray900,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
   },
   grid: {
     flexDirection: 'row',
@@ -225,73 +149,43 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   infoSection: {
-    gap: 16,
+    gap: 12,
   },
   infoCard: {
     backgroundColor: neutralColors.surface,
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 12,
+    padding: 16,
     borderWidth: 1,
     borderColor: neutralColors.border,
   },
   infoTitle: {
-    fontSize: 16,
-    fontWeight: '700' as const,
+    fontSize: 14,
+    fontWeight: '600' as const,
     color: neutralColors.text.primary,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   infoList: {
-    gap: 12,
+    gap: 8,
   },
   infoItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: 8,
   },
   infoBullet: {
-    fontSize: 16,
+    fontSize: 14,
     color: neutralColors.primary,
-    fontWeight: '700' as const,
+    fontWeight: '600' as const,
     marginTop: 1,
   },
   infoText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 13,
     color: neutralColors.text.secondary,
-    lineHeight: 20,
-  },
-  specsCard: {
-    backgroundColor: neutralColors.white,
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: neutralColors.border,
-  },
-  specsTitle: {
-    fontSize: 16,
-    fontWeight: '700' as const,
-    color: neutralColors.text.primary,
-    marginBottom: 16,
-  },
-  specRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: neutralColors.border,
-  },
-  specLabel: {
-    fontSize: 14,
-    color: neutralColors.text.secondary,
-  },
-  specValue: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: neutralColors.text.primary,
+    lineHeight: 18,
   },
   errorText: {
-    fontSize: 16,
+    fontSize: 14,
     color: neutralColors.text.secondary,
     textAlign: 'center',
     padding: 20,
