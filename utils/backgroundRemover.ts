@@ -1,11 +1,5 @@
 import { Platform } from 'react-native';
 
-/**
- * Optimized background removal with fast fallbacks
- * @param base64Image - Base64 encoded image string
- * @param aggressive - Use more aggressive background removal
- * @returns Base64 encoded image with background removed
- */
 export async function removeBackground(base64Image: string, aggressive: boolean = true): Promise<string> {
   console.log('Starting optimized background removal...');
 
@@ -55,9 +49,6 @@ export async function removeBackground(base64Image: string, aggressive: boolean 
   return base64Image;
 }
 
-/**
- * Fast canvas-based background removal for web
- */
 async function canvasBackgroundRemoval(base64Image: string): Promise<string> {
   if (Platform.OS !== 'web' || typeof document === 'undefined') {
     return base64Image;
@@ -67,7 +58,7 @@ async function canvasBackgroundRemoval(base64Image: string): Promise<string> {
     const timeoutId = setTimeout(() => {
       console.log('Canvas processing timeout - using original');
       resolve(base64Image);
-    }, 1500); // 1.5 second timeout
+    }, 1500);
     
     try {
       const canvas = document.createElement('canvas');
@@ -91,17 +82,15 @@ async function canvasBackgroundRemoval(base64Image: string): Promise<string> {
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const data = imageData.data;
           
-          // Quick background detection - just use corners
           const bgColor = {
             r: data[0],
             g: data[1],
             b: data[2]
           };
           
-          const tolerance = 50; // Balanced tolerance
+          const tolerance = 50;
           
-          // Optimized background removal - process every 2nd pixel for speed
-          const step = canvas.width * canvas.height > 250000 ? 2 : 1; // Skip pixels for large images
+          const step = canvas.width * canvas.height > 250000 ? 2 : 1;
           
           for (let y = 0; y < canvas.height; y += step) {
             for (let x = 0; x < canvas.width; x += step) {
@@ -110,16 +99,13 @@ async function canvasBackgroundRemoval(base64Image: string): Promise<string> {
               const g = data[idx + 1];
               const b = data[idx + 2];
               
-              // Simple distance calculation
               const distance = Math.abs(r - bgColor.r) + 
                              Math.abs(g - bgColor.g) + 
                              Math.abs(b - bgColor.b);
               
               if (distance < tolerance * 3) {
-                // Make current pixel transparent
                 data[idx + 3] = 0;
                 
-                // Fill skipped pixels if stepping
                 if (step > 1) {
                   for (let dy = 0; dy < step && y + dy < canvas.height; dy++) {
                     for (let dx = 0; dx < step && x + dx < canvas.width; dx++) {
@@ -176,9 +162,6 @@ async function canvasBackgroundRemoval(base64Image: string): Promise<string> {
   });
 }
 
-/**
- * Fast auto-crop for images
- */
 export async function autoCropImage(base64Image: string): Promise<string> {
   if (Platform.OS !== 'web' || typeof document === 'undefined') {
     return base64Image;
@@ -187,7 +170,7 @@ export async function autoCropImage(base64Image: string): Promise<string> {
   return new Promise((resolve) => {
     const timeoutId = setTimeout(() => {
       resolve(base64Image);
-    }, 1000); // 1 second timeout
+    }, 1000);
     
     try {
       const canvas = document.createElement('canvas');
@@ -211,7 +194,6 @@ export async function autoCropImage(base64Image: string): Promise<string> {
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const data = imageData.data;
           
-          // Fast bounds detection - sample every 4th pixel for speed
           let minX = canvas.width;
           let minY = canvas.height;
           let maxX = 0;
@@ -229,7 +211,6 @@ export async function autoCropImage(base64Image: string): Promise<string> {
             }
           }
           
-          // Add padding
           const padding = 10;
           minX = Math.max(0, minX - padding);
           minY = Math.max(0, minY - padding);
@@ -239,7 +220,6 @@ export async function autoCropImage(base64Image: string): Promise<string> {
           const cropWidth = maxX - minX + 1;
           const cropHeight = maxY - minY + 1;
           
-          // Skip if crop is minimal
           if (cropWidth > canvas.width * 0.9 && cropHeight > canvas.height * 0.9) {
             clearTimeout(timeoutId);
             resolve(base64Image);
@@ -303,9 +283,158 @@ export async function autoCropImage(base64Image: string): Promise<string> {
   });
 }
 
-/**
- * Optimized sticker processing pipeline
- */
+type PostProcessOptions = {
+  alphaThreshold?: number;
+  fringeErode?: number;
+  despeckleSize?: number;
+  matteRGB?: { r: number; g: number; b: number } | null;
+};
+
+async function defringeAndDespeckle(base64Image: string, options?: PostProcessOptions): Promise<string> {
+  const opts: Required<PostProcessOptions> = {
+    alphaThreshold: options?.alphaThreshold ?? 10,
+    fringeErode: options?.fringeErode ?? 1,
+    despeckleSize: options?.despeckleSize ?? 2,
+    matteRGB: options?.matteRGB ?? null,
+  } as Required<PostProcessOptions>;
+
+  if (Platform.OS !== 'web' || typeof document === 'undefined') {
+    return base64Image;
+  }
+
+  return new Promise((resolve) => {
+    const timeoutId = setTimeout(() => {
+      resolve(base64Image);
+    }, 1500);
+
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) {
+        clearTimeout(timeoutId);
+        resolve(base64Image);
+        return;
+      }
+
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+
+          for (let i = 0; i < data.length; i += 4) {
+            const a = data[i + 3];
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            if (a < opts.alphaThreshold) {
+              data[i + 3] = 0;
+              continue;
+            }
+            if (a < 64 && r > 240 && g > 240 && b > 240) {
+              data[i + 3] = 0;
+            }
+          }
+
+          if (opts.fringeErode > 0) {
+            for (let iter = 0; iter < opts.fringeErode; iter++) {
+              const copy = new Uint8ClampedArray(data);
+              const w = canvas.width;
+              const h = canvas.height;
+              for (let y = 1; y < h - 1; y++) {
+                for (let x = 1; x < w - 1; x++) {
+                  const idx = (y * w + x) * 4 + 3;
+                  if (copy[idx] === 0) continue;
+                  let transparentNeighbors = 0;
+                  for (let ny = -1; ny <= 1; ny++) {
+                    for (let nx = -1; nx <= 1; nx++) {
+                      if (nx === 0 && ny === 0) continue;
+                      const nIdx = ((y + ny) * w + (x + nx)) * 4 + 3;
+                      if (copy[nIdx] < 20) transparentNeighbors++;
+                    }
+                  }
+                  if (transparentNeighbors >= 5) {
+                    data[idx] = 0;
+                  }
+                }
+              }
+            }
+          }
+
+          if (opts.despeckleSize > 0) {
+            const copy = new Uint8ClampedArray(data);
+            const w = canvas.width;
+            const h = canvas.height;
+            for (let y = 1; y < h - 1; y++) {
+              for (let x = 1; x < w - 1; x++) {
+                const aIdx = (y * w + x) * 4 + 3;
+                if (copy[aIdx] === 0) continue;
+                let count = 0;
+                for (let ny = -1; ny <= 1; ny++) {
+                  for (let nx = -1; nx <= 1; nx++) {
+                    const nIdx = ((y + ny) * w + (x + nx)) * 4 + 3;
+                    if (copy[nIdx] > 0) count++;
+                  }
+                }
+                if (count <= opts.despeckleSize) {
+                  data[aIdx] = 0;
+                }
+              }
+            }
+          }
+
+          if (opts.matteRGB) {
+            const mr = opts.matteRGB.r;
+            const mg = opts.matteRGB.g;
+            const mb = opts.matteRGB.b;
+            for (let i = 0; i < data.length; i += 4) {
+              const a = data[i + 3];
+              if (a === 0 || a === 255) continue;
+              const alpha = a / 255;
+              data[i] = Math.round(data[i] * alpha + mr * (1 - alpha));
+              data[i + 1] = Math.round(data[i + 1] * alpha + mg * (1 - alpha));
+              data[i + 2] = Math.round(data[i + 2] * alpha + mb * (1 - alpha));
+            }
+          }
+
+          ctx.putImageData(imageData, 0, 0);
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              clearTimeout(timeoutId);
+              resolve(base64Image);
+              return;
+            }
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const result = reader.result as string;
+              const base64Result = result.split(',')[1];
+              clearTimeout(timeoutId);
+              console.log('Defringe/despeckle complete');
+              resolve(base64Result);
+            };
+            reader.readAsDataURL(blob);
+          }, 'image/png', 0.92);
+        } catch (e) {
+          clearTimeout(timeoutId);
+          resolve(base64Image);
+        }
+      };
+      img.onerror = () => {
+        clearTimeout(timeoutId);
+        resolve(base64Image);
+      };
+      img.src = `data:image/png;base64,${base64Image}`;
+    } catch (e) {
+      clearTimeout(timeoutId);
+      resolve(base64Image);
+    }
+  });
+}
+
 export async function processStickerImage(
   base64Image: string,
   skipBackgroundRemoval: boolean = false,
@@ -325,6 +454,12 @@ export async function processStickerImage(
       });
       const removalPromise = removeBackground(base64Image, !isAIGenerated);
       processedImage = await Promise.race([removalPromise, timeoutPromise]);
+
+      try {
+        processedImage = await defringeAndDespeckle(processedImage, { alphaThreshold: 12, fringeErode: 1, despeckleSize: 2 });
+      } catch (ppErr) {
+        console.log('Post-process failed, continuing');
+      }
     }
 
     if (Platform.OS === 'web') {
