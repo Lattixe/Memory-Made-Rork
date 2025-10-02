@@ -18,8 +18,11 @@ export default function StickerSheetPreview({
   const stickerOption = getStickerOption(sheetSize, stickerCount);
   
   const gridItems = useMemo(() => {
-    return Array.from({ length: stickerCount }, (_, i) => i);
-  }, [stickerCount]);
+    if (!stickerOption) return [];
+    const [cols, rows] = stickerOption.grid;
+    const totalCells = cols * rows;
+    return Array.from({ length: totalCells }, (_, i) => i);
+  }, [stickerOption]);
   
   if (!stickerOption) {
     return (
