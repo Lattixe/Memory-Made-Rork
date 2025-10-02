@@ -172,11 +172,14 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
     );
   }, [selectedStickers, onDeleteSticker]);
 
-  const renderStickerCard = useCallback((item: SavedSticker) => {
+  const renderStickerCard = useCallback((item: SavedSticker, index: number) => {
     const isSelected = selectedStickers.has(item.id);
+    const isNotLastInRow = (index + 1) % gridSize !== 0;
     const cardStyle = {
       width: itemWidth,
       aspectRatio: 1,
+      marginBottom: itemGap,
+      marginRight: isNotLastInRow ? itemGap : 0,
     };
     
     return (
@@ -214,7 +217,7 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
         )}
       </TouchableOpacity>
     );
-  }, [stickers, itemWidth, gridSize, selectionMode, selectedStickers, formatDate, toggleSelection, handleLongPress]);
+  }, [stickers, itemWidth, itemGap, gridSize, selectionMode, selectedStickers, formatDate, toggleSelection, handleLongPress]);
 
   if (stickers.length === 0) {
     return (
@@ -291,8 +294,8 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
         contentContainerStyle={styles.gridContainer}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.grid, { gap: itemGap }]}>
-          {stickers.map(renderStickerCard)}
+        <View style={styles.grid}>
+          {stickers.map((sticker, index) => renderStickerCard(sticker, index))}
         </View>
       </ScrollView>
 
