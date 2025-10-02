@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,19 @@ import {
   TouchableOpacity,
   Alert,
   Image,
+  ScrollView,
+  Dimensions,
 } from 'react-native';
-import { Trash2, ShoppingCart, Calendar, Edit3, ArrowLeft } from 'lucide-react-native';
+import { Trash2, ShoppingCart, Edit3, ArrowLeft } from 'lucide-react-native';
 import { neutralColors } from '@/constants/colors';
 import { SavedSticker } from '@/contexts/UserContext';
 import { router } from 'expo-router';
 import ImageGalleryModal from './ImageGalleryModal';
+
+const { width: screenWidth } = Dimensions.get('window');
+const CARD_PADDING = 16;
+const CARD_GAP = 12;
+const CARD_WIDTH = (screenWidth - (CARD_PADDING * 2) - CARD_GAP) / 2;
 
 
 interface StickerGalleryProps {
@@ -112,7 +119,7 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
           setSelectedImageIndex(index);
           setGalleryVisible(true);
         }}
-        activeOpacity={0.9}
+        activeOpacity={0.95}
       >
         <Image 
           source={{ uri: item.stickerImage }} 
@@ -122,49 +129,38 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
       </TouchableOpacity>
       
       <View style={styles.stickerInfo}>
-        <View style={styles.dateContainer}>
-          <Calendar size={14} color={neutralColors.text.secondary} />
-          <Text style={styles.dateText}>{formatDate(item.createdAt)}</Text>
-        </View>
+        <Text style={styles.dateText}>{formatDate(item.createdAt)}</Text>
         
         <View style={styles.actionButtons}>
           <TouchableOpacity
-            style={styles.reorderButton}
-            onPress={() => handleReorderSticker(item)}
-            activeOpacity={0.7}
-          >
-            <ShoppingCart size={14} color={neutralColors.primary} />
-            <Text style={styles.reorderButtonText} numberOfLines={1}>Reorder</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.editButton}
+            style={styles.actionButton}
             onPress={() => handleEditSticker(item)}
             activeOpacity={0.7}
           >
-            <Edit3 size={14} color={neutralColors.white} />
-            <Text style={styles.editButtonText} numberOfLines={1}>Edit</Text>
+            <Edit3 size={16} color={neutralColors.primary} />
           </TouchableOpacity>
           
           <TouchableOpacity
-            style={styles.deleteButton}
+            style={styles.actionButton}
+            onPress={() => handleReorderSticker(item)}
+            activeOpacity={0.7}
+          >
+            <ShoppingCart size={16} color={neutralColors.primary} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.actionButton}
             onPress={() => handleDeleteSticker(item)}
             activeOpacity={0.7}
           >
-            <Trash2 size={14} color={neutralColors.error} />
+            <Trash2 size={16} color={neutralColors.error} />
           </TouchableOpacity>
         </View>
       </View>
     </View>
   ), [stickers, formatDate, handleDeleteSticker, handleReorderSticker, handleEditSticker]);
 
-  const stickerRows = useMemo(() => {
-    const rows = [];
-    for (let i = 0; i < stickers.length; i += 2) {
-      rows.push(stickers.slice(i, i + 2));
-    }
-    return rows;
-  }, [stickers]);
+
 
   if (stickers.length === 0) {
     return (
@@ -182,34 +178,33 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.headerTop}>
-          {onBack && (
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={onBack}
-              activeOpacity={0.7}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <ArrowLeft size={24} color={neutralColors.text.primary} />
-            </TouchableOpacity>
-          )}
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.title}>Your Memories</Text>
-            <Text style={styles.subtitle}>
-              {`${stickers.length} saved memory sticker${stickers.length !== 1 ? 's' : ''}`}
-            </Text>
-          </View>
+        {onBack && (
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={onBack}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <ArrowLeft size={24} color={neutralColors.text.primary} />
+          </TouchableOpacity>
+        )}
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.title}>Your Memories</Text>
+          <Text style={styles.subtitle}>
+            {stickers.length} {stickers.length === 1 ? 'sticker' : 'stickers'}
+          </Text>
         </View>
       </View>
       
-      <View style={styles.gridContainer}>
-        {stickerRows.map((rowItems, rowIndex) => (
-          <View key={rowIndex} style={styles.row}>
-            {rowItems.map(renderStickerCard)}
-            {rowItems.length === 1 && <View style={styles.emptyPlaceholder} />}
-          </View>
-        ))}
-      </View>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.gridContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.grid}>
+          {stickers.map(renderStickerCard)}
+        </View>
+      </ScrollView>
 
       <ImageGalleryModal
         visible={galleryVisible}
@@ -224,56 +219,66 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: neutralColors.background,
   },
   header: {
-    marginBottom: 24,
-  },
-  headerTop: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    paddingHorizontal: CARD_PADDING,
+    paddingTop: 8,
+    paddingBottom: 20,
     gap: 12,
   },
   backButton: {
-    marginTop: 2,
-    padding: 8,
-    marginLeft: -8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: neutralColors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: neutralColors.gray900,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   headerTextContainer: {
     flex: 1,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700' as const,
     color: neutralColors.text.primary,
-    marginBottom: 4,
+    marginBottom: 2,
     letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: neutralColors.text.secondary,
+    fontWeight: '500' as const,
+  },
+  scrollView: {
+    flex: 1,
   },
   gridContainer: {
-    paddingBottom: 20,
+    paddingHorizontal: CARD_PADDING,
+    paddingBottom: 24,
   },
-  row: {
+  grid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
+    flexWrap: 'wrap',
+    gap: CARD_GAP,
   },
   stickerCard: {
-    flex: 1,
-    maxWidth: '48%',
+    width: CARD_WIDTH,
     backgroundColor: neutralColors.white,
     borderRadius: 16,
     overflow: 'hidden',
-    marginHorizontal: 4,
-    borderWidth: 1,
-    borderColor: neutralColors.border,
     shadowColor: neutralColors.gray900,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
   stickerImageContainer: {
     width: '100%',
@@ -283,72 +288,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stickerImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'contain',
+    width: '90%',
+    height: '90%',
   },
   stickerInfo: {
     padding: 12,
-  },
-  dateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
+    gap: 10,
   },
   dateText: {
-    fontSize: 13,
+    fontSize: 12,
     color: neutralColors.text.secondary,
     fontWeight: '500' as const,
   },
   actionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 8,
   },
-  reorderButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: neutralColors.surface,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 10,
+  actionButton: {
     flex: 1,
-  },
-  reorderButtonText: {
-    fontSize: 12,
-    color: neutralColors.primary,
-    fontWeight: '600' as const,
-  },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: neutralColors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    height: 40,
     borderRadius: 10,
-    shadowColor: neutralColors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  editButtonText: {
-    fontSize: 12,
-    color: neutralColors.white,
-    fontWeight: '600' as const,
-  },
-
-  deleteButton: {
-    padding: 8,
-    borderRadius: 10,
-    backgroundColor: neutralColors.surface,
+    backgroundColor: neutralColors.gray50,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: neutralColors.border,
   },
   emptyContainer: {
     flex: 1,
@@ -368,9 +334,5 @@ const styles = StyleSheet.create({
     color: neutralColors.text.secondary,
     textAlign: 'center',
     lineHeight: 22,
-  },
-  emptyPlaceholder: {
-    flex: 1,
-    marginHorizontal: 4,
   },
 });
