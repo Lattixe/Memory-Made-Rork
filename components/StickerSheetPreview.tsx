@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { neutralColors } from '@/constants/colors';
 import { STICKER_SHEET_LAYOUTS, getStickerOption, SheetSize } from '@/constants/stickerSheetLayouts';
@@ -26,7 +26,7 @@ export default function StickerSheetPreview({
   }
 
   const [cols, rows] = stickerOption.grid;
-  const cells = useMemo(() => rows * cols, [rows, cols]);
+  const aspect = cols && rows ? cols / rows : 1;
 
   return (
     <View style={styles.container} testID="sticker-sheet-preview-root">
@@ -41,33 +41,16 @@ export default function StickerSheetPreview({
         <View style={styles.sheetBorder}>
           <View
             style={[
-              styles.grid,
-              {
-                aspectRatio: cols / rows,
-              },
+              styles.sheetCanvas,
+              { aspectRatio: aspect },
             ]}
-            testID="sticker-sheet-grid"
+            testID="sticker-sheet-canvas"
           >
-            {Array.from({ length: cells }, (_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.gridCell,
-                  {
-                    width: `${100 / cols}%`,
-                  },
-                ]}
-                testID={`sticker-cell-${index}`}
-              >
-                <View style={styles.miniStickerContainer}>
-                  <Image
-                    source={{ uri: stickerImage }}
-                    style={styles.miniSticker}
-                    resizeMode="contain"
-                  />
-                </View>
-              </View>
-            ))}
+            <Image
+              source={{ uri: stickerImage }}
+              style={styles.sheetImage}
+              resizeMode="contain"
+            />
           </View>
         </View>
 
@@ -128,26 +111,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: neutralColors.border,
   },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  sheetCanvas: {
     backgroundColor: neutralColors.background,
     borderRadius: 8,
     overflow: 'hidden',
+    width: '100%',
   },
-  gridCell: {
-    padding: 1,
-    aspectRatio: 1,
-  },
-  miniStickerContainer: {
-    flex: 1,
-    backgroundColor: neutralColors.white,
-    borderRadius: 2,
-    padding: 2,
-    borderWidth: 0.5,
-    borderColor: neutralColors.border,
-  },
-  miniSticker: {
+  sheetImage: {
     width: '100%',
     height: '100%',
   },
