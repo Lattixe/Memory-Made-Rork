@@ -770,10 +770,6 @@ const StickerSheetScreen = memo(() => {
                           source={{ uri: item.sticker.stickerImage }}
                           style={styles.canvasStickerImage}
                         />
-                        <View style={[
-                          styles.cutLineIndicator,
-                          (item.isOutOfBounds || item.isColliding) && styles.cutLineError
-                        ]} />
                       </Animated.View>
                       
                       {draggedSticker === item.id && (
@@ -1053,36 +1049,26 @@ const styles = StyleSheet.create({
   stickerOutline: {
     width: '100%',
     height: '100%',
-    borderRadius: 8,
-    borderWidth: STICKER_OUTLINE_WIDTH,
-    borderColor: neutralColors.white,
-    backgroundColor: neutralColors.white,
+    borderRadius: 0,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    backgroundColor: 'transparent',
     shadowColor: neutralColors.gray900,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.18,
     shadowRadius: 10,
     elevation: 4,
-    overflow: 'hidden',
+    overflow: 'visible',
     position: 'relative',
   },
   cutLineIndicator: {
     position: 'absolute',
-    top: -1,
-    left: -1,
-    right: -1,
-    bottom: -1,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.08)',
-    borderStyle: 'dashed',
   },
   cutLineError: {
     borderColor: neutralColors.error + '40',
     borderWidth: 2,
   },
   stickerOutlineDragging: {
-    borderColor: neutralColors.primary + '60',
-    borderWidth: 3,
     shadowOpacity: 0.3,
     shadowRadius: 15,
     elevation: 10,
