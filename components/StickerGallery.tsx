@@ -288,7 +288,7 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
       
       <ScrollView 
         style={styles.scrollView}
-        contentContainerStyle={[styles.gridContainer, { gap: itemGap }]}
+        contentContainerStyle={styles.gridContainer}
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.grid, { gap: itemGap }]}>
@@ -387,12 +387,14 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    width: '100%',
   },
   stickerCard: {
     backgroundColor: neutralColors.gray100,
     borderRadius: 4,
     overflow: 'hidden',
     position: 'relative',
+    marginBottom: 0,
   },
   stickerCardSelected: {
     opacity: 0.7,
