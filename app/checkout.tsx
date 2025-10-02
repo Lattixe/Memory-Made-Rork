@@ -378,7 +378,7 @@ export default function CheckoutScreen() {
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-          <View style={styles.content}>
+          <View style={styles.content} testID="checkout-screen">
             <View style={styles.header}>
               <Text style={styles.title}>
                 {isStickerSheetFlow 
@@ -406,15 +406,15 @@ export default function CheckoutScreen() {
                 </Text>
               </View>
               {isStickerSheetFlow ? (
-                <View style={styles.stickerSheetPreview}>
+                <View style={styles.stickerSheetPreview} testID="sticker-sheet-preview">
                   <StickerSheetPreview
-                    stickerImage={finalStickers}
+                    stickerImage={isStickerSheetFlow ? (directOriginalImage ?? finalStickers) : finalStickers}
                     sheetSize={sheetSize}
                     stickerCount={stickerCount}
                   />
                 </View>
               ) : (
-                <View style={styles.stickerPreview}>
+                <View style={styles.stickerPreview} testID="single-sticker-preview">
                   <Image source={{ uri: finalStickers }} style={styles.stickerImage} />
                 </View>
               )}
