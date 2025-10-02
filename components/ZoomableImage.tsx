@@ -16,6 +16,7 @@ interface ZoomableImageProps {
   maxZoom?: number;
   minZoom?: number;
   testID?: string;
+  fullScreen?: boolean;
 }
 
 export default function ZoomableImage({
@@ -25,12 +26,13 @@ export default function ZoomableImage({
   maxZoom = 4,
   minZoom = 1,
   testID,
+  fullScreen = false,
 }: ZoomableImageProps) {
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
 
-  const containerWidth = useMemo(() => Math.max(0, screenWidth - 96), [screenWidth]);
-  const containerHeight = 350;
+  const containerWidth = useMemo(() => fullScreen ? screenWidth : Math.max(0, screenWidth - 96), [screenWidth, fullScreen]);
+  const containerHeight = useMemo(() => fullScreen ? screenHeight * 0.7 : 350, [screenHeight, fullScreen]);
 
   const handleSingleTap = useCallback(() => {
     if (onPress) onPress();
@@ -53,7 +55,7 @@ export default function ZoomableImage({
       );
       return { width: finalWidth * scale, height: finalHeight * scale };
     },
-    [containerWidth],
+    [containerWidth, containerHeight],
   );
 
   const handleImageLoad = useCallback(() => {
@@ -75,7 +77,7 @@ export default function ZoomableImage({
         setImageSize({ width: containerWidth * 0.8, height: containerHeight * 0.8 });
       },
     );
-  }, [source?.uri, containerWidth, computeFitSize]);
+  }, [source?.uri, containerWidth, containerHeight, computeFitSize]);
 
   const scrollContentStyle = useMemo(
     () => [

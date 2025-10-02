@@ -68,6 +68,7 @@ export default function ImageGalleryModal({
         onPress={toggleControls}
         maxZoom={4}
         minZoom={1}
+        fullScreen
       />
     </View>
   );
@@ -242,8 +243,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   zoomableContainer: {
+    flex: 1,
     width: screenWidth,
-    height: screenHeight - 160,
   },
   navButton: {
     position: 'absolute',
