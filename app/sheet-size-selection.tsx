@@ -15,7 +15,7 @@ import { neutralColors } from '@/constants/colors';
 import { STICKER_SHEET_LAYOUTS, SHEET_CONSTANTS, SheetSize as LayoutSheetSize } from '@/constants/stickerSheetLayouts';
 import { router, useLocalSearchParams } from 'expo-router';
 
-type SheetSize = '3x3' | '4x4' | '5x5';
+type SheetSize = '3x3' | '4x4' | '5.5x5.5';
 
 type SheetConfig = {
   size: SheetSize;
@@ -41,10 +41,10 @@ const SHEET_CONFIGS: SheetConfig[] = [
     description: 'Most popular size',
   },
   {
-    size: '5x5',
-    displayName: '5" × 5"',
-    inches: 5.0,
-    price: 24.99,
+    size: '5.5x5.5',
+    displayName: '5.5" × 5.5"',
+    inches: 5.5,
+    price: 27.99,
     description: 'Maximum stickers per sheet',
   },
 ];

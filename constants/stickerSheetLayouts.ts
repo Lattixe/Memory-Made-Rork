@@ -1,7 +1,7 @@
 // Dynamic sticker sheet layout configurations
 // Based on the new grid system with configurable sticker counts per sheet size
 
-export type SheetSize = '3x3' | '4x4' | '5x5';
+export type SheetSize = '3x3' | '4x4' | '5.5x5.5';
 
 export type StickerCountOption = {
   count: number;
@@ -115,50 +115,50 @@ const SHEET_4X4_OPTIONS: StickerCountOption[] = [
   })(),
 ];
 
-// 5" × 5" sheet options (U = 4.75")
-const SHEET_5X5_OPTIONS: StickerCountOption[] = [
+// 5.5" × 5.5" sheet options (U = 5.25")
+const SHEET_5_5X5_5_OPTIONS: StickerCountOption[] = [
   (() => {
-    const { sizeInches, sizePixels } = calculateStickerSize(5.0, 7);
+    const { sizeInches, sizePixels } = calculateStickerSize(5.5, 7);
     return {
       count: 49,
       grid: [7, 7] as [number, number],
       stickerSizeInches: sizeInches,
       stickerSizePixels: sizePixels,
       displayName: 'Micro (49)',
-      description: '7×7 grid • ~0.61" per sticker',
+      description: '7×7 grid • ~0.68" per sticker',
     };
   })(),
   (() => {
-    const { sizeInches, sizePixels } = calculateStickerSize(5.0, 6);
+    const { sizeInches, sizePixels } = calculateStickerSize(5.5, 6);
     return {
       count: 36,
       grid: [6, 6] as [number, number],
       stickerSizeInches: sizeInches,
       stickerSizePixels: sizePixels,
       displayName: 'Small (36)',
-      description: '6×6 grid • ~0.73" per sticker',
+      description: '6×6 grid • ~0.81" per sticker',
     };
   })(),
   (() => {
-    const { sizeInches, sizePixels } = calculateStickerSize(5.0, 5);
+    const { sizeInches, sizePixels } = calculateStickerSize(5.5, 5);
     return {
       count: 25,
       grid: [5, 5] as [number, number],
       stickerSizeInches: sizeInches,
       stickerSizePixels: sizePixels,
       displayName: 'Medium (25)',
-      description: '5×5 grid • ~0.89" per sticker',
+      description: '5×5 grid • ~0.99" per sticker',
     };
   })(),
   (() => {
-    const { sizeInches, sizePixels } = calculateStickerSize(5.0, 4);
+    const { sizeInches, sizePixels } = calculateStickerSize(5.5, 4);
     return {
       count: 16,
       grid: [4, 4] as [number, number],
       stickerSizeInches: sizeInches,
       stickerSizePixels: sizePixels,
       displayName: 'Large (16)',
-      description: '4×4 grid • ~1.13" per sticker',
+      description: '4×4 grid • ~1.25" per sticker',
     };
   })(),
 ];
@@ -178,12 +178,12 @@ export const STICKER_SHEET_LAYOUTS = {
     options: SHEET_4X4_OPTIONS,
     defaultOption: SHEET_4X4_OPTIONS[0], // 6×6 (36) for lots of stickers
   },
-  '5x5': {
-    sheetSizeInches: 5.0,
-    sheetSizePixels: 5.0 * DPI,
-    displayName: '5" × 5"',
-    options: SHEET_5X5_OPTIONS,
-    defaultOption: SHEET_5X5_OPTIONS[1], // 6×6 (36) is sweet spot
+  '5.5x5.5': {
+    sheetSizeInches: 5.5,
+    sheetSizePixels: 5.5 * DPI,
+    displayName: '5.5" × 5.5"',
+    options: SHEET_5_5X5_5_OPTIONS,
+    defaultOption: SHEET_5_5X5_5_OPTIONS[1], // 6×6 (36) is sweet spot
   },
 } as const;
 
