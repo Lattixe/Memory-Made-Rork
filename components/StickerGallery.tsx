@@ -16,9 +16,10 @@ import { router } from 'expo-router';
 import ImageGalleryModal from './ImageGalleryModal';
 
 const { width: screenWidth } = Dimensions.get('window');
-const CARD_PADDING = 16;
-const CARD_GAP = 12;
-const CARD_WIDTH = (screenWidth - (CARD_PADDING * 2) - CARD_GAP) / 2;
+const GRID_PADDING = 20;
+const ITEM_GAP = 16;
+const ITEMS_PER_ROW = 2;
+const ITEM_WIDTH = (screenWidth - (GRID_PADDING * 2) - (ITEM_GAP * (ITEMS_PER_ROW - 1))) / ITEMS_PER_ROW;
 
 
 interface StickerGalleryProps {
@@ -126,36 +127,35 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
           style={styles.stickerImage}
           resizeMode="contain"
         />
+        <View style={styles.imageOverlay}>
+          <Text style={styles.dateText}>{formatDate(item.createdAt)}</Text>
+        </View>
       </TouchableOpacity>
       
-      <View style={styles.stickerInfo}>
-        <Text style={styles.dateText}>{formatDate(item.createdAt)}</Text>
+      <View style={styles.actionButtons}>
+        <TouchableOpacity
+          style={styles.iconButton}
+          onPress={() => handleEditSticker(item)}
+          activeOpacity={0.7}
+        >
+          <Edit3 size={18} color={neutralColors.text.primary} strokeWidth={2} />
+        </TouchableOpacity>
         
-        <View style={styles.actionButtons}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleEditSticker(item)}
-            activeOpacity={0.7}
-          >
-            <Edit3 size={16} color={neutralColors.primary} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleReorderSticker(item)}
-            activeOpacity={0.7}
-          >
-            <ShoppingCart size={16} color={neutralColors.primary} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleDeleteSticker(item)}
-            activeOpacity={0.7}
-          >
-            <Trash2 size={16} color={neutralColors.error} />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.iconButton}
+          onPress={() => handleReorderSticker(item)}
+          activeOpacity={0.7}
+        >
+          <ShoppingCart size={18} color={neutralColors.text.primary} strokeWidth={2} />
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.iconButton}
+          onPress={() => handleDeleteSticker(item)}
+          activeOpacity={0.7}
+        >
+          <Trash2 size={18} color={neutralColors.error} strokeWidth={2} />
+        </TouchableOpacity>
       </View>
     </View>
   ), [stickers, formatDate, handleDeleteSticker, handleReorderSticker, handleEditSticker]);
@@ -224,9 +224,9 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: CARD_PADDING,
-    paddingTop: 8,
-    paddingBottom: 20,
+    paddingHorizontal: GRID_PADDING,
+    paddingTop: 12,
+    paddingBottom: 24,
     gap: 12,
   },
   backButton: {
@@ -246,39 +246,39 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700' as const,
     color: neutralColors.text.primary,
-    marginBottom: 2,
-    letterSpacing: -0.5,
+    marginBottom: 4,
+    letterSpacing: -0.8,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 15,
     color: neutralColors.text.secondary,
-    fontWeight: '500' as const,
+    fontWeight: '400' as const,
   },
   scrollView: {
     flex: 1,
   },
   gridContainer: {
-    paddingHorizontal: CARD_PADDING,
-    paddingBottom: 24,
+    paddingHorizontal: GRID_PADDING,
+    paddingBottom: 32,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: CARD_GAP,
+    gap: ITEM_GAP,
   },
   stickerCard: {
-    width: CARD_WIDTH,
+    width: ITEM_WIDTH,
     backgroundColor: neutralColors.white,
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: 'hidden',
     shadowColor: neutralColors.gray900,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 4,
   },
   stickerImageContainer: {
     width: '100%',
@@ -286,35 +286,43 @@ const styles = StyleSheet.create({
     backgroundColor: neutralColors.gray50,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
   stickerImage: {
-    width: '90%',
-    height: '90%',
-  },
-  stickerInfo: {
+    width: '100%',
+    height: '100%',
     padding: 12,
-    gap: 10,
+  },
+  imageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   dateText: {
-    fontSize: 12,
-    color: neutralColors.text.secondary,
-    fontWeight: '500' as const,
+    fontSize: 11,
+    color: neutralColors.white,
+    fontWeight: '600' as const,
+    letterSpacing: 0.3,
   },
   actionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
+    justifyContent: 'space-around',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    gap: 4,
   },
-  actionButton: {
-    flex: 1,
-    height: 40,
-    borderRadius: 10,
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: neutralColors.gray50,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: neutralColors.border,
   },
   emptyContainer: {
     flex: 1,
