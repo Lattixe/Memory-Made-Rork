@@ -37,7 +37,7 @@ interface StickerGalleryProps {
 export default function StickerGallery({ stickers, onDeleteSticker, onSelectSticker, onBack }: StickerGalleryProps) {
   const [galleryVisible, setGalleryVisible] = useState<boolean>(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
-  const [gridSize, setGridSize] = useState<GridSize>(3);
+  const [gridSize, setGridSize] = useState<GridSize>(2);
   const [selectedStickers, setSelectedStickers] = useState<Set<string>>(new Set());
   const [selectionMode, setSelectionMode] = useState<boolean>(false);
   
