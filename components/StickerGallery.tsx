@@ -5,13 +5,13 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
+  Image,
 } from 'react-native';
 import { Trash2, ShoppingCart, Calendar, Edit3, ArrowLeft } from 'lucide-react-native';
 import { neutralColors } from '@/constants/colors';
 import { SavedSticker } from '@/contexts/UserContext';
 import { router } from 'expo-router';
 import ImageGalleryModal from './ImageGalleryModal';
-import ZoomableImage from './ZoomableImage';
 
 
 interface StickerGalleryProps {
@@ -114,11 +114,10 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
         }}
         activeOpacity={0.9}
       >
-        <ZoomableImage 
+        <Image 
           source={{ uri: item.stickerImage }} 
           style={styles.stickerImage}
-          maxZoom={3}
-          minZoom={1}
+          resizeMode="contain"
         />
       </TouchableOpacity>
       
@@ -134,8 +133,8 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
             onPress={() => handleReorderSticker(item)}
             activeOpacity={0.7}
           >
-            <ShoppingCart size={16} color={neutralColors.primary} />
-            <Text style={styles.reorderButtonText}>Reorder</Text>
+            <ShoppingCart size={14} color={neutralColors.primary} />
+            <Text style={styles.reorderButtonText} numberOfLines={1}>Reorder</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
@@ -143,8 +142,8 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
             onPress={() => handleEditSticker(item)}
             activeOpacity={0.7}
           >
-            <Edit3 size={16} color={neutralColors.white} />
-            <Text style={styles.editButtonText}>Edit</Text>
+            <Edit3 size={14} color={neutralColors.white} />
+            <Text style={styles.editButtonText} numberOfLines={1}>Edit</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
@@ -152,7 +151,7 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
             onPress={() => handleDeleteSticker(item)}
             activeOpacity={0.7}
           >
-            <Trash2 size={16} color={neutralColors.error} />
+            <Trash2 size={14} color={neutralColors.error} />
           </TouchableOpacity>
         </View>
       </View>
@@ -263,6 +262,7 @@ const styles = StyleSheet.create({
   },
   stickerCard: {
     flex: 1,
+    maxWidth: '48%',
     backgroundColor: neutralColors.white,
     borderRadius: 16,
     overflow: 'hidden',
@@ -274,15 +274,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
-    minHeight: 200,
   },
   stickerImageContainer: {
+    width: '100%',
     aspectRatio: 1,
-    backgroundColor: neutralColors.white,
+    backgroundColor: neutralColors.gray50,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   stickerImage: {
     width: '100%',
     height: '100%',
+    resizeMode: 'contain',
   },
   stickerInfo: {
     padding: 12,
@@ -301,35 +304,33 @@ const styles = StyleSheet.create({
   actionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 8,
   },
   reorderButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+    gap: 4,
     backgroundColor: neutralColors.surface,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: 10,
     flex: 1,
-    marginRight: 6,
   },
   reorderButtonText: {
-    fontSize: 13,
+    fontSize: 12,
     color: neutralColors.primary,
     fontWeight: '600' as const,
   },
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 4,
     backgroundColor: neutralColors.primary,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 12,
-    marginRight: 6,
-    minWidth: 60,
-    justifyContent: 'center',
+    borderRadius: 10,
     shadowColor: neutralColors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
@@ -337,15 +338,17 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   editButtonText: {
-    fontSize: 13,
+    fontSize: 12,
     color: neutralColors.white,
     fontWeight: '600' as const,
   },
 
   deleteButton: {
     padding: 8,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: neutralColors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   emptyContainer: {
     flex: 1,
