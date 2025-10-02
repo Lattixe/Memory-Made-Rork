@@ -3,11 +3,20 @@ import { setAuthToken, clearAuthToken } from '@/lib/authToken';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import { safeJsonParse } from '@/utils/json';
+import * as FileSystem from 'expo-file-system';
 
 export interface SavedSticker {
   id: string;
   originalImage: string;
   stickerImage: string;
+  createdAt: string;
+  title?: string;
+}
+
+interface StickerMetadata {
+  id: string;
+  originalImagePath: string;
+  stickerImagePath: string;
   createdAt: string;
   title?: string;
 }
@@ -35,6 +44,53 @@ export interface UserContextType {
 
 const USER_STORAGE_KEY = '@user_data';
 const STICKERS_STORAGE_KEY = '@saved_stickers';
+const STICKERS_DIR = `${FileSystem.documentDirectory}stickers/`;
+
+const ensureStickersDirectory = async () => {
+  const dirInfo = await FileSystem.getInfoAsync(STICKERS_DIR);
+  if (!dirInfo.exists) {
+    await FileSystem.makeDirectoryAsync(STICKERS_DIR, { intermediates: true });
+  }
+};
+
+const saveImageToFile = async (base64Data: string, filename: string): Promise<string> => {
+  await ensureStickersDirectory();
+  const filePath = `${STICKERS_DIR}${filename}`;
+  await FileSystem.writeAsStringAsync(filePath, base64Data, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  return filePath;
+};
+
+const readImageFromFile = async (filePath: string): Promise<string> => {
+  try {
+    const base64 = await FileSystem.readAsStringAsync(filePath, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return `data:image/png;base64,${base64}`;
+  } catch (error) {
+    console.error('Error reading image from file:', error);
+    throw error;
+  }
+};
+
+const deleteImageFile = async (filePath: string): Promise<void> => {
+  try {
+    const fileInfo = await FileSystem.getInfoAsync(filePath);
+    if (fileInfo.exists) {
+      await FileSystem.deleteAsync(filePath);
+    }
+  } catch (error) {
+    console.error('Error deleting image file:', error);
+  }
+};
+
+const extractBase64FromDataUri = (dataUri: string): string => {
+  if (dataUri.startsWith('data:')) {
+    return dataUri.split(',')[1] || dataUri;
+  }
+  return dataUri;
+};
 
 export const [UserProvider, useUser] = createContextHook<UserContextType>(() => {
   const [user, setUser] = useState<User | null>(null);
@@ -64,9 +120,30 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
       }
 
       if (stickersData) {
-        const stickersResult = safeJsonParse<SavedSticker[]>(stickersData);
+        const stickersResult = safeJsonParse<StickerMetadata[]>(stickersData);
         if (stickersResult.success && Array.isArray(stickersResult.data)) {
-          setSavedStickers(stickersResult.data);
+          const loadedStickers = await Promise.all(
+            stickersResult.data.map(async (metadata) => {
+              try {
+                const [originalImage, stickerImage] = await Promise.all([
+                  readImageFromFile(metadata.originalImagePath),
+                  readImageFromFile(metadata.stickerImagePath),
+                ]);
+                const sticker: SavedSticker = {
+                  id: metadata.id,
+                  originalImage,
+                  stickerImage,
+                  createdAt: metadata.createdAt,
+                  title: metadata.title,
+                };
+                return sticker;
+              } catch (error) {
+                console.error(`Error loading sticker ${metadata.id}:`, error);
+                return null;
+              }
+            })
+          );
+          setSavedStickers(loadedStickers.filter((s): s is SavedSticker => s !== null));
         } else {
           console.warn('Invalid stickers data format, clearing storage:', stickersResult.error);
           await AsyncStorage.removeItem(STICKERS_STORAGE_KEY);
@@ -174,11 +251,21 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
 
   const logout = useCallback(async () => {
     try {
+      const metadataStr = await AsyncStorage.getItem(STICKERS_STORAGE_KEY);
+      if (metadataStr) {
+        const metadata: StickerMetadata[] = JSON.parse(metadataStr);
+        await Promise.all(
+          metadata.flatMap(m => [
+            deleteImageFile(m.originalImagePath),
+            deleteImageFile(m.stickerImagePath),
+          ])
+        );
+      }
+      
       await AsyncStorage.multiRemove([USER_STORAGE_KEY, STICKERS_STORAGE_KEY]);
       setUser(null);
       await clearAuthToken();
       setSavedStickers([]);
-      await AsyncStorage.removeItem(USER_STORAGE_KEY);
     } catch (error) {
       console.error('Error logging out:', error);
       throw error;
@@ -189,8 +276,10 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
     if (!user) return;
 
     try {
+      const stickerId = Date.now().toString();
+      
       const newSticker: SavedSticker = {
-        id: Date.now().toString(),
+        id: stickerId,
         originalImage,
         stickerImage,
         createdAt: new Date().toISOString(),
@@ -201,18 +290,40 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
       const updatedStickers = [newSticker, ...savedStickers];
       setSavedStickers(updatedStickers);
       
-      // Debounce storage operation to prevent blocking
+      // Save images to file system in background
       if (storageTimeoutRef.current) {
         clearTimeout(storageTimeoutRef.current);
       }
       
       storageTimeoutRef.current = setTimeout(async () => {
         try {
-          await AsyncStorage.setItem(STICKERS_STORAGE_KEY, JSON.stringify(updatedStickers));
+          const originalBase64 = extractBase64FromDataUri(originalImage);
+          const stickerBase64 = extractBase64FromDataUri(stickerImage);
+          
+          const [originalImagePath, stickerImagePath] = await Promise.all([
+            saveImageToFile(originalBase64, `${stickerId}_original.png`),
+            saveImageToFile(stickerBase64, `${stickerId}_sticker.png`),
+          ]);
+
+          const metadata: StickerMetadata = {
+            id: stickerId,
+            originalImagePath,
+            stickerImagePath,
+            createdAt: newSticker.createdAt,
+            title,
+          };
+
+          const existingMetadata = await AsyncStorage.getItem(STICKERS_STORAGE_KEY);
+          const metadataArray: StickerMetadata[] = existingMetadata 
+            ? JSON.parse(existingMetadata) 
+            : [];
+          
+          metadataArray.unshift(metadata);
+          await AsyncStorage.setItem(STICKERS_STORAGE_KEY, JSON.stringify(metadataArray));
         } catch (error) {
           console.error('Error persisting sticker:', error);
-          // Revert optimistic update on failure
-          setSavedStickers(prev => prev.filter(s => s.id !== newSticker.id));
+          setSavedStickers(prev => prev.filter(s => s.id !== stickerId));
+          throw error;
         }
       }, 100);
     } catch (error) {
@@ -223,8 +334,23 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
 
   const deleteSticker = useCallback(async (stickerId: string) => {
     try {
+      const metadataStr = await AsyncStorage.getItem(STICKERS_STORAGE_KEY);
+      if (metadataStr) {
+        const metadata: StickerMetadata[] = JSON.parse(metadataStr);
+        const stickerMetadata = metadata.find(m => m.id === stickerId);
+        
+        if (stickerMetadata) {
+          await Promise.all([
+            deleteImageFile(stickerMetadata.originalImagePath),
+            deleteImageFile(stickerMetadata.stickerImagePath),
+          ]);
+        }
+        
+        const updatedMetadata = metadata.filter(m => m.id !== stickerId);
+        await AsyncStorage.setItem(STICKERS_STORAGE_KEY, JSON.stringify(updatedMetadata));
+      }
+      
       const updatedStickers = savedStickers.filter(sticker => sticker.id !== stickerId);
-      await AsyncStorage.setItem(STICKERS_STORAGE_KEY, JSON.stringify(updatedStickers));
       setSavedStickers(updatedStickers);
     } catch (error) {
       console.error('Error deleting sticker:', error);
@@ -238,18 +364,29 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
   
   const getStickerById = useCallback(async (stickerId: string): Promise<SavedSticker | null> => {
     try {
-      // First check in current state
       const sticker = savedStickers.find(s => s.id === stickerId);
       if (sticker) {
         return sticker;
       }
       
-      // If not found in state, check AsyncStorage directly
       const stored = await AsyncStorage.getItem(STICKERS_STORAGE_KEY);
       if (stored) {
-        const stickersResult = safeJsonParse<SavedSticker[]>(stored);
-        if (stickersResult.success && Array.isArray(stickersResult.data)) {
-          return stickersResult.data.find(s => s.id === stickerId) || null;
+        const metadataResult = safeJsonParse<StickerMetadata[]>(stored);
+        if (metadataResult.success && Array.isArray(metadataResult.data)) {
+          const metadata = metadataResult.data.find(m => m.id === stickerId);
+          if (metadata) {
+            const [originalImage, stickerImage] = await Promise.all([
+              readImageFromFile(metadata.originalImagePath),
+              readImageFromFile(metadata.stickerImagePath),
+            ]);
+            return {
+              id: metadata.id,
+              originalImage,
+              stickerImage,
+              createdAt: metadata.createdAt,
+              title: metadata.title,
+            };
+          }
         }
       }
       
@@ -268,14 +405,28 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
           : sticker
       );
       
-      // Optimistic update
       setSavedStickers(updatedStickers);
       
-      // Persist to storage
-      await AsyncStorage.setItem(STICKERS_STORAGE_KEY, JSON.stringify(updatedStickers));
+      const metadataStr = await AsyncStorage.getItem(STICKERS_STORAGE_KEY);
+      if (metadataStr) {
+        const metadata: StickerMetadata[] = JSON.parse(metadataStr);
+        const stickerMetadata = metadata.find(m => m.id === stickerId);
+        
+        if (stickerMetadata) {
+          await deleteImageFile(stickerMetadata.stickerImagePath);
+          
+          const stickerBase64 = extractBase64FromDataUri(newStickerImage);
+          const newStickerImagePath = await saveImageToFile(
+            stickerBase64,
+            `${stickerId}_sticker.png`
+          );
+          
+          stickerMetadata.stickerImagePath = newStickerImagePath;
+          await AsyncStorage.setItem(STICKERS_STORAGE_KEY, JSON.stringify(metadata));
+        }
+      }
     } catch (error) {
       console.error('Error updating sticker:', error);
-      // Revert on failure
       await loadUserData();
       throw error;
     }
