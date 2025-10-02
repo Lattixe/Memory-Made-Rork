@@ -437,19 +437,11 @@ export default function UploadScreen() {
       
       // Apply aggressive background removal for AI-generated stickers
       console.log('Applying enhanced background removal and auto-cropping...');
-      const cleanedBase64 = await processStickerImage(data.image.base64Data, false, true); // Don't skip removal, mark as AI-generated
+      const cleanedBase64 = await processStickerImage(data.image.base64Data, false, true);
       
       const generatedImageUri = `data:${data.image.mimeType};base64,${cleanedBase64}`;
       
-      // Save generated sticker to library immediately
-      try {
-        await saveSticker(generatedImageUri, generatedImageUri, `Custom: ${promptText.trim().substring(0, 50)}${promptText.trim().length > 50 ? '...' : ''}`);
-        console.log('Generated sticker saved to library');
-      } catch (error) {
-        console.error('Error saving generated sticker:', error);
-      }
-      
-      // Navigate immediately for better UX
+      // Navigate immediately for better UX - saving will happen in review screen
       setIsNavigating(true);
       router.push({
         pathname: '/review',
@@ -525,15 +517,7 @@ export default function UploadScreen() {
 
           const generatedStickerUri = `data:${data.image.mimeType};base64,${data.image.base64Data}`;
           
-          // Save generated sticker to library immediately
-          try {
-            await saveSticker(selectedImage, generatedStickerUri, 'Memory Sticker');
-            console.log('Generated sticker saved to library');
-          } catch (error) {
-            console.error('Error saving generated sticker:', error);
-          }
-
-          // Update the review screen with processed data
+          // Update the review screen with processed data - saving will happen in review screen
           router.setParams({
             generatedStickers: generatedStickerUri,
             isProcessing: 'false',

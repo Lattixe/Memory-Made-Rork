@@ -225,14 +225,6 @@ export default function ReviewScreen() {
         const newIndex = updatedVersions.length - 1;
         setCurrentVersionIndex(newIndex);
         
-        // Save regenerated custom sticker to library
-        try {
-          await saveSticker(originalImage, newSticker, `Custom: ${originalPrompt.substring(0, 50)}${originalPrompt.length > 50 ? '...' : ''}`);
-          console.log('Regenerated custom sticker saved to library');
-        } catch (error) {
-          console.error('Error saving regenerated sticker:', error);
-        }
-        
         // Scroll to new version with a slight delay
         setTimeout(() => {
           flatListRef.current?.scrollToIndex({ 
@@ -264,14 +256,6 @@ export default function ReviewScreen() {
         setStickerVersions(updatedVersions);
         const newIndex = updatedVersions.length - 1;
         setCurrentVersionIndex(newIndex);
-        
-        // Save regenerated photo-based sticker to library
-        try {
-          await saveSticker(originalImage, newSticker, 'Memory Sticker');
-          console.log('Regenerated sticker saved to library');
-        } catch (error) {
-          console.error('Error saving regenerated sticker:', error);
-        }
         
         // Scroll to new version with a slight delay
         setTimeout(() => {
@@ -336,7 +320,7 @@ export default function ReviewScreen() {
     );
   };
 
-  const proceedToCheckout = () => {
+  const proceedToCheckout = async () => {
     if (!currentStickers || isLoadingSticker) return;
     
     // For photo-based stickers, ensure we're not on the original photo
@@ -344,7 +328,16 @@ export default function ReviewScreen() {
       ? stickerVersions[1] 
       : currentStickers;
     
-    // Navigate immediately without any async operations
+    // Save sticker first if not already saved
+    try {
+      const titlePrefix = isCustom ? 'Custom' : 'Memory Sticker';
+      await saveSticker(originalImage, stickerToShip, titlePrefix);
+      console.log('Sticker saved successfully before checkout');
+    } catch (error) {
+      console.error('Error saving sticker:', error);
+    }
+    
+    // Navigate to checkout
     router.push({
       pathname: '/checkout',
       params: {
@@ -352,16 +345,6 @@ export default function ReviewScreen() {
         finalStickers: stickerToShip,
       },
     });
-    
-    // Save sticker in background after navigation with even longer delay to avoid any blocking
-    setTimeout(async () => {
-      try {
-        await saveSticker(originalImage, stickerToShip);
-        console.log('Sticker saved successfully in background');
-      } catch (error) {
-        console.error('Error saving sticker in background:', error);
-      }
-    }, 1000);
   };
 
   const uploadNewPhoto = () => {
@@ -420,16 +403,6 @@ export default function ReviewScreen() {
       setCurrentVersionIndex(newIndex);
       setEditPrompt('');
       setShowEditInput(false);
-      
-      // Save edited sticker to library
-      try {
-        const titlePrefix = isCustom ? 'Custom' : 'Memory Sticker';
-        const editTitle = editPrompt.trim() ? `${titlePrefix}: ${editPrompt.substring(0, 50)}${editPrompt.length > 50 ? '...' : ''}` : titlePrefix;
-        await saveSticker(originalImage, newSticker, editTitle);
-        console.log('Edited sticker saved to library');
-      } catch (error) {
-        console.error('Error saving edited sticker:', error);
-      }
       
       // Scroll to new version with a slight delay
       setTimeout(() => {
