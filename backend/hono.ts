@@ -48,6 +48,93 @@ app.use(
   })
 );
 
+// Replicate 851-labs background removal proxy (keeps API key server-side)
+app.post('/rmbg', async (c) => {
+  try {
+    const token = process.env.REPLICATE_API_TOKEN;
+    if (!token) {
+      console.error('[backend] Missing REPLICATE_API_TOKEN');
+      return c.json({ error: 'Server not configured' }, 500);
+    }
+
+    const body = await c.req.json<{ imageBase64: string }>();
+    const imageBase64 = body?.imageBase64 ?? '';
+    if (!imageBase64 || typeof imageBase64 !== 'string') {
+      return c.json({ error: 'Invalid image' }, 400);
+    }
+
+    const startRes = await fetch('https://api.replicate.com/v1/models/851-labs/background-remover/predictions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        input: {
+          image: `data:image/png;base64,${imageBase64}`,
+          format: 'png'
+        }
+      })
+    });
+
+    if (!startRes.ok) {
+      const text = await startRes.text();
+      console.error('[backend] Replicate start error:', startRes.status, text);
+      return c.json({ error: 'Replicate start failed' }, 502);
+    }
+
+    const prediction = await startRes.json() as { id: string };
+    const pollUrl = `https://api.replicate.com/v1/predictions/${prediction.id}`;
+
+    const timeoutMs = 45000;
+    const pollIntervalMs = 1200;
+    const started = Date.now();
+
+    let outputUrl: string | null = null;
+    while (Date.now() - started < timeoutMs) {
+      await new Promise(res => setTimeout(res, pollIntervalMs));
+      const pollRes = await fetch(pollUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!pollRes.ok) {
+        const text = await pollRes.text();
+        console.error('[backend] Replicate poll error:', pollRes.status, text);
+        break;
+      }
+      const data = await pollRes.json();
+      const status = data?.status as string | undefined;
+      if (status === 'succeeded') {
+        const out = data?.output;
+        if (typeof out === 'string') {
+          outputUrl = out;
+        } else if (Array.isArray(out) && out.length > 0 && typeof out[0] === 'string') {
+          outputUrl = out[0];
+        }
+        break;
+      }
+      if (status === 'failed' || status === 'canceled') {
+        console.error('[backend] Replicate status:', status, data?.error);
+        break;
+      }
+    }
+
+    if (!outputUrl) {
+      return c.json({ error: 'Background removal timed out' }, 504);
+    }
+
+    const imgRes = await fetch(outputUrl);
+    if (!imgRes.ok) {
+      return c.json({ error: 'Failed to download output' }, 502);
+    }
+    const arrayBuf = await imgRes.arrayBuffer();
+    const base64 = Buffer.from(arrayBuf).toString('base64');
+    return c.json({ base64 });
+  } catch (err) {
+    console.error('[backend] /rmbg error:', err);
+    return c.json({ error: 'Unexpected error' }, 500);
+  }
+});
+
 // Simple health check endpoint
 app.get("/", (c) => {
   console.log('[backend] Health check endpoint hit');
@@ -64,7 +151,8 @@ app.get("/debug", (c) => {
     routes: {
       health: "/api/",
       trpc: "/api/trpc",
-      debug: "/api/debug"
+      debug: "/api/debug",
+      rmbg: "/api/rmbg"
     }
   });
 });

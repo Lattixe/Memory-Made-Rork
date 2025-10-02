@@ -8,8 +8,38 @@ import { Platform } from 'react-native';
  */
 export async function removeBackground(base64Image: string, aggressive: boolean = true): Promise<string> {
   console.log('Starting optimized background removal...');
-  
-  // For web, try fast canvas-based removal first
+
+  try {
+    const baseUrl = (process.env.EXPO_PUBLIC_RORK_API_BASE_URL && typeof process.env.EXPO_PUBLIC_RORK_API_BASE_URL === 'string')
+      ? process.env.EXPO_PUBLIC_RORK_API_BASE_URL
+      : (typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '');
+
+    if (baseUrl) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      const res = await fetch(`${baseUrl}/api/rmbg`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64Image }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const json = await res.json() as { base64?: string };
+        if (json?.base64 && typeof json.base64 === 'string') {
+          console.log('Replicate background removal complete');
+          return json.base64;
+        }
+      } else {
+        console.log('Replicate proxy responded with', res.status);
+      }
+    } else {
+      console.log('No base URL for backend; skipping Replicate proxy');
+    }
+  } catch (e) {
+    console.log('Replicate proxy failed, falling back:', e);
+  }
+
   if (Platform.OS === 'web') {
     try {
       const canvasResult = await canvasBackgroundRemoval(base64Image);
@@ -18,68 +48,11 @@ export async function removeBackground(base64Image: string, aggressive: boolean 
         return canvasResult;
       }
     } catch (error) {
-      console.log('Canvas removal failed, trying API...');
+      console.log('Canvas removal failed, trying final fallback...');
     }
   }
-  
-  try {
-    // Use simpler prompt for faster processing
-    const prompt = aggressive 
-      ? "Remove background completely, keep subject only with transparent background"
-      : "Remove background, keep subject with transparent background";
-    
-    const requestBody = {
-      prompt,
-      images: [{ type: 'image', image: base64Image }],
-    };
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 second timeout
-
-    const response = await fetch('https://toolkit.rork.com/images/edit/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      console.log(`API returned ${response.status}, using fallback`);
-      return base64Image;
-    }
-
-    const responseText = await response.text();
-    
-    // Quick validation
-    if (responseText.trim().startsWith('<')) {
-      console.log('HTML response received, using fallback');
-      return base64Image;
-    }
-    
-    try {
-      const result = JSON.parse(responseText);
-      if (result?.image?.base64Data) {
-        console.log('API background removal complete');
-        return result.image.base64Data;
-      }
-    } catch (e) {
-      console.log('Parse error, using fallback');
-    }
-    
-    return base64Image;
-  } catch (error: any) {
-    if (error.name === 'AbortError') {
-      console.log('Background removal timeout - returning original');
-    } else {
-      console.log('Background removal error - returning original');
-    }
-    return base64Image;
-  }
+  return base64Image;
 }
 
 /**
@@ -334,50 +307,27 @@ export async function autoCropImage(base64Image: string): Promise<string> {
  * Optimized sticker processing pipeline
  */
 export async function processStickerImage(
-  base64Image: string, 
+  base64Image: string,
   skipBackgroundRemoval: boolean = false,
   isAIGenerated: boolean = true
 ): Promise<string> {
   try {
     console.log('Processing sticker image...');
-    
-    // For AI-generated stickers, skip background removal since they already have transparent backgrounds
-    if (isAIGenerated) {
-      console.log('AI-generated sticker detected, skipping background removal');
-      
-      // Only do auto-crop for AI-generated images on web
-      if (Platform.OS === 'web') {
-        try {
-          const croppedImage = await autoCropImage(base64Image);
-          return croppedImage;
-        } catch (cropError) {
-          console.log('Auto-crop failed, using uncropped image');
-          return base64Image;
-        }
-      }
-      
-      return base64Image;
-    }
-    
+
     let processedImage = base64Image;
-    
-    // Only do background removal for non-AI generated images
-    if (!skipBackgroundRemoval && !isAIGenerated) {
-      // Create a timeout promise with shorter timeout
+
+    if (!skipBackgroundRemoval) {
       const timeoutPromise = new Promise<string>((resolve) => {
         setTimeout(() => {
           console.log('Background removal taking too long, using original');
           resolve(base64Image);
-        }, 5000); // 5 second timeout - reduced from 10
+        }, 20000);
       });
-      
-      // Race between background removal and timeout
-      const removalPromise = removeBackground(base64Image, false); // Less aggressive for photos
+      const removalPromise = removeBackground(base64Image, !isAIGenerated);
       processedImage = await Promise.race([removalPromise, timeoutPromise]);
     }
-    
-    // Auto-crop only on web and if we have a processed image
-    if (Platform.OS === 'web' && processedImage !== base64Image) {
+
+    if (Platform.OS === 'web') {
       try {
         const croppedImage = await autoCropImage(processedImage);
         return croppedImage;
@@ -386,7 +336,7 @@ export async function processStickerImage(
         return processedImage;
       }
     }
-    
+
     return processedImage;
   } catch (error) {
     console.log('Processing error, returning original:', error);
