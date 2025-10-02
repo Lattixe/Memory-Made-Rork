@@ -174,12 +174,13 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
 
   const renderStickerCard = useCallback((item: SavedSticker, index: number) => {
     const isSelected = selectedStickers.has(item.id);
-    const isNotLastInRow = (index + 1) % gridSize !== 0;
+    const columnIndex = index % gridSize;
+    const isLastInRow = columnIndex === gridSize - 1;
     const cardStyle = {
       width: itemWidth,
       aspectRatio: 1,
       marginBottom: itemGap,
-      marginRight: isNotLastInRow ? itemGap : 0,
+      marginRight: isLastInRow ? 0 : itemGap,
     };
     
     return (
