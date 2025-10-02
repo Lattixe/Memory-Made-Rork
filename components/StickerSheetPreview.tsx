@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { neutralColors } from '@/constants/colors';
 import { STICKER_SHEET_LAYOUTS, getStickerOption, SheetSize } from '@/constants/stickerSheetLayouts';
@@ -16,19 +16,20 @@ export default function StickerSheetPreview({
 }: StickerSheetPreviewProps) {
   const layout = STICKER_SHEET_LAYOUTS[sheetSize];
   const stickerOption = getStickerOption(sheetSize, stickerCount);
-  
+
   if (!stickerOption) {
     return (
-      <View style={styles.container}>
+      <View style={styles.container} testID="sticker-sheet-preview-error">
         <Text style={styles.errorText}>Invalid sticker configuration</Text>
       </View>
     );
   }
 
   const [cols, rows] = stickerOption.grid;
+  const cells = useMemo(() => rows * cols, [rows, cols]);
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="sticker-sheet-preview-root">
       <View style={styles.header}>
         <Text style={styles.title}>Sticker Sheet Preview</Text>
         <Text style={styles.subtitle}>
@@ -45,17 +46,18 @@ export default function StickerSheetPreview({
                 aspectRatio: cols / rows,
               },
             ]}
+            testID="sticker-sheet-grid"
           >
-            {Array.from({ length: stickerCount }, (_, index) => (
+            {Array.from({ length: cells }, (_, index) => (
               <View
                 key={index}
                 style={[
                   styles.gridCell,
                   {
                     width: `${100 / cols}%`,
-                    height: `${100 / rows}%`,
                   },
                 ]}
+                testID={`sticker-cell-${index}`}
               >
                 <View style={styles.miniStickerContainer}>
                   <Image
@@ -135,6 +137,7 @@ const styles = StyleSheet.create({
   },
   gridCell: {
     padding: 1,
+    aspectRatio: 1,
   },
   miniStickerContainer: {
     flex: 1,
