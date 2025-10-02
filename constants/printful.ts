@@ -23,7 +23,7 @@ export const PRINTFUL_PRODUCTS = {
     variants: {
       '3x3': { id: 9517, size: '3″×3″', price: 4.50 },
       '4x4': { id: 9518, size: '4″×4″', price: 5.50 },
-      '5x5': { id: 9519, size: '5″×5″', price: 7.50 },
+      '5.5x5.5': { id: 9519, size: '5.5″×5.5″', price: 7.50 },
     },
     defaultVariant: '3x3',
   },
