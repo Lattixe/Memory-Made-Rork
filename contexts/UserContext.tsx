@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Platform } from 'react-native';
 import { setAuthToken, clearAuthToken } from '@/lib/authToken';
-import { processStickerImage } from '@/utils/backgroundRemover';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import { safeJsonParse } from '@/utils/json';
@@ -301,19 +300,7 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
     try {
       const stickerId = Date.now().toString();
 
-      let processedStickerDataUri = stickerImage;
-      try {
-        console.log('[saveSticker] Ensuring transparent background before save');
-        const inputBase64 = extractBase64FromDataUri(stickerImage);
-        const cleanedBase64 = await Promise.race([
-          processStickerImage(inputBase64, false, false),
-          new Promise<string>((resolve) => setTimeout(() => resolve(inputBase64), 5000)),
-        ]);
-        processedStickerDataUri = `data:image/png;base64,${cleanedBase64}`;
-      } catch (e) {
-        console.log('[saveSticker] Background cleanup failed, using original');
-        processedStickerDataUri = stickerImage;
-      }
+      const processedStickerDataUri = stickerImage;
       
       const newSticker: SavedSticker = {
         id: stickerId,
