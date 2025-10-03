@@ -896,9 +896,9 @@ const styles = StyleSheet.create({
     color: neutralColors.text.secondary,
   },
   stickerSheetPreview: {
-    backgroundColor: neutralColors.surface,
-    borderRadius: 20,
-    padding: 20,
+    backgroundColor: neutralColors.white,
+    borderRadius: 24,
+    padding: 8,
     borderWidth: 1,
     borderColor: neutralColors.border,
   },
