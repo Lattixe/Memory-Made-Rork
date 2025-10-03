@@ -526,13 +526,36 @@ const StickerSheetScreen = memo(() => {
         img.onload = () => {
           const x = stickerPos.x * scaleX;
           const y = stickerPos.y * scaleY;
-          const width = STICKER_SIZE_PIXELS * scaleX;
-          const height = STICKER_SIZE_PIXELS * scaleY;
+          const boxWidth = STICKER_SIZE_PIXELS * scaleX;
+          const boxHeight = STICKER_SIZE_PIXELS * scaleY;
+
+          const naturalW = img.naturalWidth ?? img.width;
+          const naturalH = img.naturalHeight ?? img.height;
+          const ratio = naturalW > 0 && naturalH > 0 ? naturalW / naturalH : 1;
+
+          let drawW = boxWidth;
+          let drawH = boxHeight;
+          if (ratio > 1) {
+            drawW = boxWidth;
+            drawH = boxWidth / ratio;
+          } else if (ratio < 1) {
+            drawH = boxHeight;
+            drawW = boxHeight * ratio;
+          }
+
+          const offsetX = (boxWidth - drawW) / 2;
+          const offsetY = (boxHeight - drawH) / 2;
           
           ctx.save();
-          ctx.translate(x + width / 2, y + height / 2);
+          ctx.translate(x + boxWidth / 2, y + boxHeight / 2);
           ctx.rotate((stickerPos.rotation * Math.PI) / 180);
-          ctx.drawImage(img, -width / 2, -height / 2, width, height);
+          ctx.drawImage(
+            img,
+            -drawW / 2,
+            -drawH / 2,
+            drawW,
+            drawH,
+          );
           ctx.restore();
           
           loadedImages++;
