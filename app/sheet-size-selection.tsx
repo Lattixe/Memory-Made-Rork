@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Grid3X3, Check, Layers } from 'lucide-react-native';
 import { neutralColors } from '@/constants/colors';
 import { STICKER_SHEET_LAYOUTS, SHEET_CONSTANTS, SheetSize as LayoutSheetSize } from '@/constants/stickerSheetLayouts';
+import {
+  getStickerDimensions,
+  calculateDynamicLayouts,
+  generateDynamicStickerSheet,
+  DynamicSheetLayout,
+  DynamicLayoutOption,
+} from '@/utils/dynamicStickerLayout';
 import { router, useLocalSearchParams } from 'expo-router';
 
 type SheetSize = '3x3' | '4x4' | '5.5x5.5';
@@ -54,13 +61,47 @@ export default function SheetSizeSelectionScreen() {
   const params = useLocalSearchParams();
   const stickerImage = typeof params.stickerImage === 'string' ? params.stickerImage : '';
   const originalImage = typeof params.originalImage === 'string' ? params.originalImage : '';
+
+  useEffect(() => {
+    async function analyzeStickerDimensions() {
+      if (!stickerImage) return;
+      
+      try {
+        console.log('[Dynamic Layout] Analyzing sticker dimensions...');
+        const dimensions = await getStickerDimensions(stickerImage);
+        console.log('[Dynamic Layout] Sticker dimensions:', dimensions);
+        
+        const layouts: Record<SheetSize, DynamicSheetLayout | null> = {
+          '3x3': calculateDynamicLayouts('3x3', dimensions),
+          '4x4': calculateDynamicLayouts('4x4', dimensions),
+          '5.5x5.5': calculateDynamicLayouts('5.5x5.5', dimensions),
+        };
+        
+        console.log('[Dynamic Layout] Generated layouts:', layouts);
+        setDynamicLayouts(layouts);
+      } catch (error) {
+        console.error('[Dynamic Layout] Error analyzing sticker:', error);
+      } finally {
+        setIsAnalyzing(false);
+      }
+    }
+    
+    analyzeStickerDimensions();
+  }, [stickerImage]);
   
   const [selectedSize, setSelectedSize] = useState<SheetSize>('4x4');
   const [selectedStickerCount, setSelectedStickerCount] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [dynamicLayouts, setDynamicLayouts] = useState<Record<SheetSize, DynamicSheetLayout | null>>({
+    '3x3': null,
+    '4x4': null,
+    '5.5x5.5': null,
+  });
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(true);
 
+  const currentDynamicLayout = dynamicLayouts[selectedSize];
   const currentLayout = STICKER_SHEET_LAYOUTS[selectedSize as LayoutSheetSize];
-  const currentStickerCount = selectedStickerCount ?? currentLayout.defaultOption.count;
+  const currentStickerCount = selectedStickerCount ?? (currentDynamicLayout?.recommendedOption.count || currentLayout.defaultOption.count);
 
   const handleGenerateSheet = async () => {
     if (!stickerImage) {
@@ -76,28 +117,48 @@ export default function SheetSizeSelectionScreen() {
         throw new Error('Invalid sheet size selected');
       }
 
-      const stickerOption = currentLayout.options.find(opt => opt.count === currentStickerCount);
-      if (!stickerOption) {
-        throw new Error('Invalid sticker count selected');
+      let sheetImageBase64: string;
+      
+      if (currentDynamicLayout) {
+        const dynamicOption = currentDynamicLayout.options.find(opt => opt.count === currentStickerCount);
+        if (!dynamicOption) {
+          throw new Error('Invalid sticker count selected');
+        }
+
+        console.log('[Sheet Generation] Creating dynamic sheet with:', {
+          size: selectedSize,
+          count: currentStickerCount,
+          grid: dynamicOption.grid,
+          dimensions: `${dynamicOption.stickerWidthInches.toFixed(2)}"×${dynamicOption.stickerHeightInches.toFixed(2)}"`,
+        });
+
+        sheetImageBase64 = await generateDynamicStickerSheet(
+          stickerImage,
+          selectedSize,
+          dynamicOption
+        );
+      } else {
+        const stickerOption = currentLayout.options.find(opt => opt.count === currentStickerCount);
+        if (!stickerOption) {
+          throw new Error('Invalid sticker count selected');
+        }
+
+        console.log('[Sheet Generation] Creating sheet with:', {
+          size: selectedSize,
+          count: currentStickerCount,
+          grid: stickerOption.grid,
+        });
+
+        sheetImageBase64 = await generateRepeatedStickerSheet(
+          stickerImage,
+          selectedSize,
+          currentStickerCount,
+          stickerOption.grid
+        );
       }
-
-      console.log('[Sheet Generation] Creating sheet with:', {
-        size: selectedSize,
-        count: currentStickerCount,
-        grid: stickerOption.grid,
-      });
-
-      // Generate the sheet image with the single sticker repeated
-      const sheetImageBase64 = await generateRepeatedStickerSheet(
-        stickerImage,
-        selectedSize,
-        currentStickerCount,
-        stickerOption.grid
-      );
 
       console.log('[Sheet Generation] Sheet generated, navigating to checkout');
 
-      // Navigate directly to checkout with the generated sheet
       router.push({
         pathname: '/checkout',
         params: {
@@ -270,7 +331,7 @@ export default function SheetSizeSelectionScreen() {
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Available Options:</Text>
                       <Text style={styles.detailValue}>
-                        {STICKER_SHEET_LAYOUTS[config.size as LayoutSheetSize].options.length} layouts
+                        {dynamicLayouts[config.size]?.options.length || STICKER_SHEET_LAYOUTS[config.size as LayoutSheetSize].options.length} layouts
                       </Text>
                     </View>
                   </View>
@@ -294,11 +355,13 @@ export default function SheetSizeSelectionScreen() {
                   <Text style={styles.sectionTitle}>Choose Sticker Count</Text>
                 </View>
                 <Text style={styles.sectionDescription}>
-                  Select how many stickers you want on your {currentLayout.displayName} sheet
+                  {currentDynamicLayout
+                    ? `Optimized for your sticker's ${currentDynamicLayout.stickerDimensions.aspectRatio.toFixed(2)}:1 aspect ratio`
+                    : `Select how many stickers you want on your ${currentLayout.displayName} sheet`}
                 </Text>
                 
                 <View style={styles.countOptionsContainer}>
-                  {currentLayout.options.map((option) => (
+                  {(currentDynamicLayout?.options || currentLayout.options).map((option) => (
                     <TouchableOpacity
                       key={option.count}
                       style={[
