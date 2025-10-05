@@ -13,6 +13,8 @@ export interface SavedSticker {
   stickerImage: string;
   createdAt: string;
   title?: string;
+  imageWidth?: number;
+  imageHeight?: number;
 }
 
 interface StickerMetadata {
@@ -21,6 +23,8 @@ interface StickerMetadata {
   stickerImagePath: string;
   createdAt: string;
   title?: string;
+  imageWidth?: number;
+  imageHeight?: number;
 }
 
 export interface User {
@@ -110,6 +114,27 @@ const extractBase64FromDataUri = (dataUri: string): string => {
   return dataUri;
 };
 
+const getImageSizeFromDataUri = async (dataUri: string): Promise<{ width: number; height: number }> => {
+  return new Promise((resolve) => {
+    if (Platform.OS === 'web') {
+      const img = new (window as any).Image();
+      img.onload = () => resolve({ width: img.naturalWidth ?? img.width, height: img.naturalHeight ?? img.height });
+      img.onerror = () => resolve({ width: 0, height: 0 });
+      img.src = dataUri;
+    } else {
+      // Image.getSize works with data URIs on native
+      // We import dynamically to avoid circular deps
+      // Using require to prevent type issues on web
+      const { Image: RNImage } = require('react-native');
+      RNImage.getSize(
+        dataUri,
+        (w: number, h: number) => resolve({ width: w, height: h }),
+        () => resolve({ width: 0, height: 0 })
+      );
+    }
+  });
+};
+
 export const [UserProvider, useUser] = createContextHook<UserContextType>(() => {
   const [user, setUser] = useState<User | null>(null);
   const [savedStickers, setSavedStickers] = useState<SavedSticker[]>([]);
@@ -153,6 +178,8 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
                   stickerImage,
                   createdAt: metadata.createdAt,
                   title: metadata.title,
+                  imageWidth: metadata.imageWidth,
+                  imageHeight: metadata.imageHeight,
                 };
                 return sticker;
               } catch (error) {
@@ -301,6 +328,7 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
       const stickerId = Date.now().toString();
 
       const processedStickerDataUri = stickerImage;
+      const size = await getImageSizeFromDataUri(processedStickerDataUri);
       
       const newSticker: SavedSticker = {
         id: stickerId,
@@ -308,6 +336,8 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
         stickerImage: processedStickerDataUri,
         createdAt: new Date().toISOString(),
         title,
+        imageWidth: size.width,
+        imageHeight: size.height,
       };
 
       const updatedStickers = [newSticker, ...savedStickers];
@@ -333,6 +363,8 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
             stickerImagePath,
             createdAt: newSticker.createdAt,
             title,
+            imageWidth: newSticker.imageWidth,
+            imageHeight: newSticker.imageHeight,
           };
 
           const existingMetadata = await AsyncStorage.getItem(STICKERS_STORAGE_KEY);
@@ -443,7 +475,11 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
             `${stickerId}_sticker.png`
           );
           
+          // try to update size metadata as well
+          const newSize = await getImageSizeFromDataUri(newStickerImage);
           stickerMetadata.stickerImagePath = newStickerImagePath;
+          stickerMetadata.imageWidth = newSize.width;
+          stickerMetadata.imageHeight = newSize.height;
           await AsyncStorage.setItem(STICKERS_STORAGE_KEY, JSON.stringify(metadata));
         }
       }

@@ -53,6 +53,8 @@ interface StickerPosition {
   y: number;
   rotation: number;
   scale: number;
+  width: number;
+  height: number;
   sticker: SavedSticker;
   isOutOfBounds?: boolean;
   isColliding?: boolean;
@@ -96,39 +98,41 @@ const StickerSheetScreen = memo(() => {
     }
   }, []);
 
-  const isWithinBounds = useCallback((x: number, y: number): boolean => {
+  const isWithinBounds = useCallback((x: number, y: number, w: number, h: number): boolean => {
     return (
       x >= SAFE_MARGIN_CANVAS &&
-      x <= SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_WIDTH - STICKER_SIZE_PIXELS &&
+      x <= SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_WIDTH - w &&
       y >= SAFE_MARGIN_CANVAS &&
-      y <= SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_HEIGHT - STICKER_SIZE_PIXELS
+      y <= SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_HEIGHT - h
     );
-  }, [SAFE_MARGIN_CANVAS, PRINTABLE_CANVAS_WIDTH, PRINTABLE_CANVAS_HEIGHT, STICKER_SIZE_PIXELS]);
+  }, [SAFE_MARGIN_CANVAS, PRINTABLE_CANVAS_WIDTH, PRINTABLE_CANVAS_HEIGHT]);
 
-  const checkCollision = useCallback((x1: number, y1: number, x2: number, y2: number): boolean => {
-    const distance = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
-    return distance < STICKER_SIZE_PIXELS + MIN_SPACING_PIXELS;
-  }, [STICKER_SIZE_PIXELS, MIN_SPACING_PIXELS]);
+  const checkCollision = useCallback((a: {x:number;y:number;w:number;h:number}, b: {x:number;y:number;w:number;h:number}): boolean => {
+    const gap = MIN_SPACING_PIXELS;
+    const noOverlap = (a.x + a.w + gap) <= b.x || (b.x + b.w + gap) <= a.x || (a.y + a.h + gap) <= b.y || (b.y + b.h + gap) <= a.y;
+    return !noOverlap;
+  }, [MIN_SPACING_PIXELS]);
 
   const findValidPosition = useCallback((targetX: number, targetY: number, currentId: string): { x: number; y: number; isValid: boolean } => {
-    let x = Math.max(SAFE_MARGIN_CANVAS, Math.min(SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_WIDTH - STICKER_SIZE_PIXELS, targetX));
-    let y = Math.max(SAFE_MARGIN_CANVAS, Math.min(SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_HEIGHT - STICKER_SIZE_PIXELS, targetY));
+    const me = selectedStickers.find(s => s.id === currentId);
+    const myW = me?.width ?? STICKER_SIZE_PIXELS;
+    const myH = me?.height ?? STICKER_SIZE_PIXELS;
+
+    let x = Math.max(SAFE_MARGIN_CANVAS, Math.min(SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_WIDTH - myW, targetX));
+    let y = Math.max(SAFE_MARGIN_CANVAS, Math.min(SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_HEIGHT - myH, targetY));
     
     const otherStickers = selectedStickers.filter(s => s.id !== currentId);
     
     for (const other of otherStickers) {
-      if (checkCollision(x, y, other.x, other.y)) {
-        const angle = Math.atan2(y - other.y, x - other.x);
-        const pushDistance = STICKER_SIZE_PIXELS + MIN_SPACING_PIXELS + 2;
-        x = other.x + Math.cos(angle) * pushDistance;
-        y = other.y + Math.sin(angle) * pushDistance;
-        
-        x = Math.max(SAFE_MARGIN_CANVAS, Math.min(SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_WIDTH - STICKER_SIZE_PIXELS, x));
-        y = Math.max(SAFE_MARGIN_CANVAS, Math.min(SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_HEIGHT - STICKER_SIZE_PIXELS, y));
+      if (checkCollision({x, y, w: myW, h: myH}, {x: other.x, y: other.y, w: other.width, h: other.height})) {
+        const pushRight = other.x + other.width + MIN_SPACING_PIXELS;
+        const pushDown = other.y + other.height + MIN_SPACING_PIXELS;
+        x = Math.min(pushRight, SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_WIDTH - myW);
+        y = Math.min(pushDown, SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_HEIGHT - myH);
       }
     }
     
-    const isValid = isWithinBounds(x, y) && !otherStickers.some(other => checkCollision(x, y, other.x, other.y));
+    const isValid = isWithinBounds(x, y, myW, myH) && !otherStickers.some(other => checkCollision({x, y, w: myW, h: myH}, {x: other.x, y: other.y, w: other.width, h: other.height}));
     
     return { x, y, isValid };
   }, [selectedStickers, isWithinBounds, checkCollision, SAFE_MARGIN_CANVAS, PRINTABLE_CANVAS_WIDTH, PRINTABLE_CANVAS_HEIGHT, STICKER_SIZE_PIXELS, MIN_SPACING_PIXELS]);
@@ -138,13 +142,13 @@ const StickerSheetScreen = memo(() => {
     const colliding: string[] = [];
     
     selectedStickers.forEach((sticker, index) => {
-      if (!isWithinBounds(sticker.x, sticker.y)) {
+      if (!isWithinBounds(sticker.x, sticker.y, sticker.width, sticker.height)) {
         outOfBounds.push(sticker.id);
       }
       
       for (let j = index + 1; j < selectedStickers.length; j++) {
         const other = selectedStickers[j];
-        if (checkCollision(sticker.x, sticker.y, other.x, other.y)) {
+        if (checkCollision({x: sticker.x, y: sticker.y, w: sticker.width, h: sticker.height}, {x: other.x, y: other.y, w: other.width, h: other.height})) {
           if (!colliding.includes(sticker.id)) colliding.push(sticker.id);
           if (!colliding.includes(other.id)) colliding.push(other.id);
         }
@@ -197,11 +201,16 @@ const StickerSheetScreen = memo(() => {
       const row = Math.floor(index / COLS);
       const col = index % COLS;
       
-      const x = startX + col * (STICKER_SIZE_PIXELS + MIN_SPACING_PIXELS);
-      const y = startY + row * (STICKER_SIZE_PIXELS + MIN_SPACING_PIXELS);
+      const slotX = startX + col * (STICKER_SIZE_PIXELS + MIN_SPACING_PIXELS);
+      const slotY = startY + row * (STICKER_SIZE_PIXELS + MIN_SPACING_PIXELS);
+
+      const w = item.width;
+      const h = item.height;
+      const x = slotX + Math.max(0, (STICKER_SIZE_PIXELS - w) / 2);
+      const y = slotY + Math.max(0, (STICKER_SIZE_PIXELS - h) / 2);
       
-      const maxX = SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_WIDTH - STICKER_SIZE_PIXELS;
-      const maxY = SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_HEIGHT - STICKER_SIZE_PIXELS;
+      const maxX = SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_WIDTH - w;
+      const maxY = SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_HEIGHT - h;
       
       const clampedX = Math.max(SAFE_MARGIN_CANVAS, Math.min(maxX, x));
       const clampedY = Math.max(SAFE_MARGIN_CANVAS, Math.min(maxY, y));
@@ -271,14 +280,17 @@ const StickerSheetScreen = memo(() => {
       },
       onPanResponderMove: (evt, gestureState) => {
         if (animatedValues.current[stickerId]) {
-          const touchOffsetX = initialTouchX - (STICKER_SIZE_PIXELS / 2);
-          const touchOffsetY = initialTouchY - (STICKER_SIZE_PIXELS / 2);
+          const me = selectedStickers.find(s => s.id === stickerId);
+          const w = me?.width ?? STICKER_SIZE_PIXELS;
+          const h = me?.height ?? STICKER_SIZE_PIXELS;
+          const touchOffsetX = initialTouchX - (w / 2);
+          const touchOffsetY = initialTouchY - (h / 2);
           const newX = startX + gestureState.dx - touchOffsetX;
           const newY = startY + gestureState.dy - touchOffsetY;
           
           animatedValues.current[stickerId].pan.setValue({ x: newX, y: newY });
           
-          const inBounds = isWithinBounds(newX, newY);
+          const inBounds = isWithinBounds(newX, newY, w, h);
           Animated.timing(animatedValues.current[stickerId].borderColor, {
             toValue: !inBounds ? 1 : 0,
             duration: 0,
@@ -289,8 +301,11 @@ const StickerSheetScreen = memo(() => {
       onPanResponderRelease: (_, gestureState) => {
         setDraggedSticker(null);
         
-        const touchOffsetX = initialTouchX - (STICKER_SIZE_PIXELS / 2);
-        const touchOffsetY = initialTouchY - (STICKER_SIZE_PIXELS / 2);
+        const me = selectedStickers.find(s => s.id === stickerId);
+        const w = me?.width ?? STICKER_SIZE_PIXELS;
+        const h = me?.height ?? STICKER_SIZE_PIXELS;
+        const touchOffsetX = initialTouchX - (w / 2);
+        const touchOffsetY = initialTouchY - (h / 2);
         const targetX = startX + gestureState.dx - touchOffsetX;
         const targetY = startY + gestureState.dy - touchOffsetY;
         
@@ -304,7 +319,7 @@ const StickerSheetScreen = memo(() => {
                 ...item, 
                 x: finalX, 
                 y: finalY,
-                isOutOfBounds: !isWithinBounds(finalX, finalY),
+                isOutOfBounds: !isWithinBounds(finalX, finalY, item.width, item.height),
                 isColliding: false
               };
             }
@@ -340,6 +355,24 @@ const StickerSheetScreen = memo(() => {
     });
   }, [initializeAnimatedValues, isWithinBounds, validatePositions, findValidPosition, STICKER_SIZE_PIXELS]);
 
+  const computeStickerBox = (sticker: SavedSticker) => {
+    const natW = sticker.imageWidth ?? STICKER_SIZE_PIXELS;
+    const natH = sticker.imageHeight ?? STICKER_SIZE_PIXELS;
+    if (natW <= 0 || natH <= 0) return { w: STICKER_SIZE_PIXELS, h: STICKER_SIZE_PIXELS };
+    const ratio = natW / natH;
+    let w = STICKER_SIZE_PIXELS;
+    let h = STICKER_SIZE_PIXELS;
+    if (ratio > 1) {
+      h = Math.round(STICKER_SIZE_PIXELS / ratio);
+    } else if (ratio < 1) {
+      w = Math.round(STICKER_SIZE_PIXELS * ratio);
+    }
+    const minEdge = 24;
+    w = Math.max(minEdge, w);
+    h = Math.max(minEdge, h);
+    return { w, h };
+  };
+
   const addStickerToSheet = useCallback((sticker: SavedSticker) => {
     if (selectedStickers.length >= MAX_STICKERS) {
       Alert.alert('Maximum Reached', `You can add up to ${MAX_STICKERS} stickers per sheet.`);
@@ -368,15 +401,17 @@ const StickerSheetScreen = memo(() => {
       for (let col = 0; col < cols; col++) {
         const gridX = startX + col * spacingX;
         const gridY = startY + row * spacingY;
-        if (isWithinBounds(gridX, gridY)) {
+        const box = computeStickerBox(sticker);
+        if (isWithinBounds(gridX, gridY, box.w, box.h)) {
           gridPositions.push({ x: gridX, y: gridY });
         }
       }
     }
     
     for (const pos of gridPositions) {
+      const { w, h } = computeStickerBox(sticker);
       const hasCollision = selectedStickers.some(existing => 
-        checkCollision(pos.x, pos.y, existing.x, existing.y)
+        checkCollision({x: pos.x, y: pos.y, w, h}, {x: existing.x, y: existing.y, w: existing.width, h: existing.height})
       );
       
       if (!hasCollision) {
@@ -389,10 +424,12 @@ const StickerSheetScreen = memo(() => {
     
     if (!positionFound) {
       const step = 20;
-      for (let testY = SAFE_MARGIN_CANVAS; testY <= SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_HEIGHT - STICKER_SIZE_PIXELS && !positionFound; testY += step) {
-        for (let testX = SAFE_MARGIN_CANVAS; testX <= SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_WIDTH - STICKER_SIZE_PIXELS && !positionFound; testX += step) {
+      const scanBox = computeStickerBox(sticker);
+      for (let testY = SAFE_MARGIN_CANVAS; testY <= SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_HEIGHT - scanBox.h && !positionFound; testY += step) {
+        for (let testX = SAFE_MARGIN_CANVAS; testX <= SAFE_MARGIN_CANVAS + PRINTABLE_CANVAS_WIDTH - scanBox.w && !positionFound; testX += step) {
+          const { w, h } = computeStickerBox(sticker);
           const hasCollision = selectedStickers.some(existing => 
-            checkCollision(testX, testY, existing.x, existing.y)
+            checkCollision({x: testX, y: testY, w, h}, {x: existing.x, y: existing.y, w: existing.width, h: existing.height})
           );
           
           if (!hasCollision) {
@@ -405,12 +442,15 @@ const StickerSheetScreen = memo(() => {
     }
     
     if (!positionFound) {
+      const tempBox = computeStickerBox(sticker);
       const tempPosition: StickerPosition = {
         id: `${sticker.id}-${Date.now()}-${Math.random()}`,
         x: SAFE_MARGIN_CANVAS,
         y: SAFE_MARGIN_CANVAS,
         rotation: 0,
         scale: 1,
+        width: tempBox.w,
+        height: tempBox.h,
         sticker,
         isOutOfBounds: false,
         isColliding: true,
@@ -423,12 +463,15 @@ const StickerSheetScreen = memo(() => {
       return;
     }
     
+    const box = computeStickerBox(sticker);
     const newPosition: StickerPosition = {
       id: `${sticker.id}-${Date.now()}-${Math.random()}`,
       x,
       y,
       rotation: 0,
       scale: 1,
+      width: box.w,
+      height: box.h,
       sticker,
       isOutOfBounds: false,
       isColliding: false,
@@ -526,8 +569,8 @@ const StickerSheetScreen = memo(() => {
         img.onload = () => {
           const x = stickerPos.x * scaleX;
           const y = stickerPos.y * scaleY;
-          const boxWidth = STICKER_SIZE_PIXELS * scaleX;
-          const boxHeight = STICKER_SIZE_PIXELS * scaleY;
+          const boxWidth = (stickerPos.width ?? STICKER_SIZE_PIXELS) * scaleX;
+          const boxHeight = (stickerPos.height ?? STICKER_SIZE_PIXELS) * scaleY;
 
           const naturalW = img.naturalWidth ?? img.width;
           const naturalH = img.naturalHeight ?? img.height;
@@ -774,8 +817,8 @@ const StickerSheetScreen = memo(() => {
                       style={[
                         styles.canvasSticker,
                         {
-                          width: STICKER_SIZE_PIXELS,
-                          height: STICKER_SIZE_PIXELS,
+                          width: item.width,
+                          height: item.height,
                         },
                         animatedStyle,
                       ]}
