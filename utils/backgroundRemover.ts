@@ -141,7 +141,7 @@ async function canvasBackgroundRemoval(base64Image: string): Promise<string> {
               reader.readAsDataURL(blob);
             },
             'image/png',
-            0.9
+            1.0
           );
         } catch (error) {
           clearTimeout(timeoutId);
@@ -262,7 +262,7 @@ export async function autoCropImage(base64Image: string): Promise<string> {
               reader.readAsDataURL(blob);
             },
             'image/png',
-            0.9
+            1.0
           );
         } catch (error) {
           clearTimeout(timeoutId);
@@ -292,9 +292,9 @@ type PostProcessOptions = {
 
 async function defringeAndDespeckle(base64Image: string, options?: PostProcessOptions): Promise<string> {
   const opts: Required<PostProcessOptions> = {
-    alphaThreshold: options?.alphaThreshold ?? 10,
-    fringeErode: options?.fringeErode ?? 1,
-    despeckleSize: options?.despeckleSize ?? 2,
+    alphaThreshold: options?.alphaThreshold ?? 5,
+    fringeErode: options?.fringeErode ?? 2,
+    despeckleSize: options?.despeckleSize ?? 3,
     matteRGB: options?.matteRGB ?? null,
   } as Required<PostProcessOptions>;
 
@@ -335,8 +335,17 @@ async function defringeAndDespeckle(base64Image: string, options?: PostProcessOp
               data[i + 3] = 0;
               continue;
             }
-            if (a < 64 && r > 240 && g > 240 && b > 240) {
+            if (a < 128 && r > 235 && g > 235 && b > 235) {
               data[i + 3] = 0;
+            }
+            if (a > 0 && a < 255) {
+              const brightness = (r + g + b) / 3;
+              if (brightness > 240) {
+                const alphaFactor = a / 255;
+                data[i] = Math.round(r * alphaFactor);
+                data[i + 1] = Math.round(g * alphaFactor);
+                data[i + 2] = Math.round(b * alphaFactor);
+              }
             }
           }
 
@@ -417,7 +426,7 @@ async function defringeAndDespeckle(base64Image: string, options?: PostProcessOp
               resolve(base64Result);
             };
             reader.readAsDataURL(blob);
-          }, 'image/png', 0.92);
+          }, 'image/png', 1.0);
         } catch (e) {
           clearTimeout(timeoutId);
           resolve(base64Image);
@@ -456,7 +465,7 @@ export async function processStickerImage(
       processedImage = await Promise.race([removalPromise, timeoutPromise]);
 
       try {
-        processedImage = await defringeAndDespeckle(processedImage, { alphaThreshold: 12, fringeErode: 1, despeckleSize: 2 });
+        processedImage = await defringeAndDespeckle(processedImage, { alphaThreshold: 5, fringeErode: 2, despeckleSize: 3 });
       } catch (ppErr) {
         console.log('Post-process failed, continuing');
       }
