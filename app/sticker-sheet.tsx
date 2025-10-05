@@ -359,17 +359,25 @@ const StickerSheetScreen = memo(() => {
     const natW = sticker.imageWidth ?? STICKER_SIZE_PIXELS;
     const natH = sticker.imageHeight ?? STICKER_SIZE_PIXELS;
     if (natW <= 0 || natH <= 0) return { w: STICKER_SIZE_PIXELS, h: STICKER_SIZE_PIXELS };
+    
     const ratio = natW / natH;
     let w = STICKER_SIZE_PIXELS;
     let h = STICKER_SIZE_PIXELS;
+    
     if (ratio > 1) {
+      w = STICKER_SIZE_PIXELS;
       h = Math.round(STICKER_SIZE_PIXELS / ratio);
     } else if (ratio < 1) {
+      h = STICKER_SIZE_PIXELS;
       w = Math.round(STICKER_SIZE_PIXELS * ratio);
     }
+    
     const minEdge = 24;
     w = Math.max(minEdge, w);
     h = Math.max(minEdge, h);
+    
+    console.log(`[computeStickerBox] Natural: ${natW}x${natH}, Ratio: ${ratio.toFixed(2)}, Computed: ${w}x${h}`);
+    
     return { w, h };
   };
 
@@ -574,20 +582,42 @@ const StickerSheetScreen = memo(() => {
 
           const naturalW = img.naturalWidth ?? img.width;
           const naturalH = img.naturalHeight ?? img.height;
-          const ratio = naturalW > 0 && naturalH > 0 ? naturalW / naturalH : 1;
-
+          
+          if (naturalW <= 0 || naturalH <= 0) {
+            console.error('[generateStickerSheetWeb] Invalid image dimensions:', naturalW, naturalH);
+            loadedImages++;
+            if (loadedImages === totalImages) {
+              resolve(canvas.toDataURL('image/png'));
+            }
+            return;
+          }
+          
+          const ratio = naturalW / naturalH;
+          
           let drawW = boxWidth;
           let drawH = boxHeight;
+          
           if (ratio > 1) {
             drawW = boxWidth;
             drawH = boxWidth / ratio;
+            if (drawH > boxHeight) {
+              drawH = boxHeight;
+              drawW = boxHeight * ratio;
+            }
           } else if (ratio < 1) {
             drawH = boxHeight;
             drawW = boxHeight * ratio;
+            if (drawW > boxWidth) {
+              drawW = boxWidth;
+              drawH = boxWidth / ratio;
+            }
+          } else {
+            const minDim = Math.min(boxWidth, boxHeight);
+            drawW = minDim;
+            drawH = minDim;
           }
-
-          const offsetX = (boxWidth - drawW) / 2;
-          const offsetY = (boxHeight - drawH) / 2;
+          
+          console.log(`[generateStickerSheetWeb] Sticker: ${stickerPos.id}, Natural: ${naturalW}x${naturalH}, Box: ${boxWidth.toFixed(0)}x${boxHeight.toFixed(0)}, Draw: ${drawW.toFixed(0)}x${drawH.toFixed(0)}`);
           
           ctx.save();
           ctx.translate(x + boxWidth / 2, y + boxHeight / 2);
