@@ -19,6 +19,7 @@ import { RefreshCw, Upload, ArrowRight, Sparkles, Edit3, ChevronLeft, ChevronRig
 import { neutralColors } from '@/constants/colors';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useUser } from '@/contexts/UserContext';
+import { processStickerImage } from '@/utils/backgroundRemover';
 
 
 type ImageEditRequest = {
@@ -219,7 +220,11 @@ export default function ReviewScreen() {
         }
 
         const data: ImageEditResponse = await response.json();
-        const newSticker = `data:${data.image.mimeType};base64,${data.image.base64Data}`;
+        
+        // Apply background removal and processing to custom regenerated sticker
+        console.log('Applying background removal to custom regenerated sticker...');
+        const cleanedBase64 = await processStickerImage(data.image.base64Data, false, true);
+        const newSticker = `data:${data.image.mimeType};base64,${cleanedBase64}`;
         const updatedVersions = [...stickerVersions, newSticker];
         setStickerVersions(updatedVersions);
         const newIndex = updatedVersions.length - 1;
@@ -251,7 +256,11 @@ export default function ReviewScreen() {
         }
 
         const data = await regenerateWithRetry(base64Data);
-        const newSticker = `data:${data.image.mimeType};base64,${data.image.base64Data}`;
+        
+        // Apply background removal and processing to regenerated sticker
+        console.log('Applying background removal to regenerated sticker...');
+        const cleanedBase64 = await processStickerImage(data.image.base64Data, false, false);
+        const newSticker = `data:${data.image.mimeType};base64,${cleanedBase64}`;
         const updatedVersions = [...stickerVersions, newSticker];
         setStickerVersions(updatedVersions);
         const newIndex = updatedVersions.length - 1;
@@ -396,7 +405,11 @@ export default function ReviewScreen() {
       }
 
       const data: ImageEditResponse = await response.json();
-      const newSticker = `data:${data.image.mimeType};base64,${data.image.base64Data}`;
+      
+      // Apply background removal and processing to edited sticker
+      console.log('Applying background removal to edited sticker...');
+      const cleanedBase64 = await processStickerImage(data.image.base64Data, false, false);
+      const newSticker = `data:${data.image.mimeType};base64,${cleanedBase64}`;
       const updatedVersions = [...stickerVersions, newSticker];
       setStickerVersions(updatedVersions);
       const newIndex = updatedVersions.length - 1;
