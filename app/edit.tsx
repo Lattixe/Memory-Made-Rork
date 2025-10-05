@@ -24,6 +24,7 @@ import { safeJsonParse } from '@/utils/json';
 import { compressBase64Image, estimateBase64Size } from '@/utils/imageCompression';
 import { processStickerImage } from '@/utils/backgroundRemover';
 import { getEditPrompt } from '@/utils/promptManager';
+import { callImageEditApi } from '@/utils/imageEditApi';
 
 type ImageEditRequest = {
   prompt: string;
@@ -299,77 +300,15 @@ const EditScreen = () => {
 
 
   const processEditWithRetry = React.useCallback(async (base64Data: string, promptToUse: string, retryCount: number = 0): Promise<ImageEditResponse> => {
-    const maxRetries = 0;
-    const timeout = 4000;
-    
     const prompt = await getEditPrompt(promptToUse);
     
-    const requestBody: ImageEditRequest = {
-      prompt,
-      images: [{ type: 'image', image: base64Data }],
-    };
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
     try {
-      console.log(`Sending edit request (attempt ${retryCount + 1}/${maxRetries + 1})...`);
+      console.log('Sending edit request...');
       
-      const response = await fetch('https://toolkit.rork.com/images/edit/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      // Handle gateway errors immediately with fallback
-      if (response.status >= 502 && response.status <= 504) {
-        console.log(`Server temporarily unavailable (${response.status}) - using style fallback`);
-        return await createLocalFallbackEdit(base64Data, promptToUse);
-      }
-      
-      if (response.status === 429) {
-        console.log('Rate limited - using style fallback');
-        return await createLocalFallbackEdit(base64Data, promptToUse);
-      }
-
-      if (!response.ok) {
-        console.log(`API Error ${response.status} - using style fallback`);
-        return await createLocalFallbackEdit(base64Data, promptToUse);
-      }
-
-      const responseText = await response.text();
-      
-      // Check for HTML error pages
-      if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
-        console.log('Received error page - using style fallback');
-        return await createLocalFallbackEdit(base64Data, promptToUse);
-      }
-      
-      // Try to parse JSON
-      const jsonResult = safeJsonParse<ImageEditResponse>(responseText);
-      
-      if (!jsonResult.success) {
-        console.log('Invalid response format - using style fallback');
-        return await createLocalFallbackEdit(base64Data, promptToUse);
-      }
-      
-      const data = jsonResult.data!;
-      
-      // Validate response
-      if (!data?.image?.base64Data) {
-        console.log('Incomplete response - using style fallback');
-        return await createLocalFallbackEdit(base64Data, promptToUse);
-      }
+      const data = await callImageEditApi(base64Data, prompt, retryCount);
       
       console.log('Edit completed successfully!');
       
-      // Always apply background removal to ensure clean transparent backgrounds
       console.log('Processing sticker with background removal...');
       
       const cleanupPromise = processStickerImage(data.image.base64Data, false, false);
@@ -377,7 +316,7 @@ const EditScreen = () => {
         setTimeout(() => {
           console.log('Processing timeout, using unprocessed image');
           resolve(data.image.base64Data);
-        }, 3000) // 3 second timeout for just cropping
+        }, 3000)
       );
       
       const cleanedBase64 = await Promise.race([cleanupPromise, timeoutPromise]);
@@ -389,31 +328,8 @@ const EditScreen = () => {
         }
       };
     } catch (error: any) {
-      clearTimeout(timeoutId);
-      
-      // Handle timeout
-      if (error.name === 'AbortError') {
-        if (retryCount < maxRetries) {
-          console.log('Request timed out, retrying...');
-          await new Promise(resolve => setTimeout(resolve, 500));
-          return processEditWithRetry(base64Data, promptToUse, retryCount + 1);
-        }
-        console.log('Request timed out - using style fallback');
-        return await createLocalFallbackEdit(base64Data, promptToUse);
-      }
-      
-      // Handle network errors with retry
-      if (retryCount < maxRetries && (error.message.includes('network') || error.message.includes('fetch'))) {
-        console.log('Network error, retrying...');
-        await new Promise(resolve => setTimeout(resolve, 500));
-        return processEditWithRetry(base64Data, promptToUse, retryCount + 1);
-      }
-      
-      // For all other errors, use fallback
       console.log('Processing error - using style fallback');
       const fallbackResult = await createLocalFallbackEdit(base64Data, promptToUse);
-      
-      // Skip cleanup on fallback to save time
       return fallbackResult;
     }
   }, [createLocalFallbackEdit]);

@@ -18,11 +18,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const ADMIN_SETTINGS_KEY = '@admin_settings';
 
+export type EditModel = 'nano-banana' | 'seedream';
+
 export interface AdminSettings {
   placeholder?: boolean;
   initialGenerationPrompt?: string;
   regenerationPrompt?: string;
   editPrompt?: string;
+  editModel?: EditModel;
 }
 
 const DEFAULT_INITIAL_GENERATION_PROMPT = 'Carefully analyze this photo and identify ALL prominent objects, people, animals, and distinctive elements. For each subject, create an accurate kiss-cut sticker design that closely matches the original appearance while optimizing for Printful printing. CRITICAL REQUIREMENTS: 1) COMPLETELY TRANSPARENT BACKGROUND - remove all background elements and make the background fully transparent (PNG format with alpha channel), 2) PRESERVE the exact colors, patterns, textures, and distinctive features of each subject from the original photo, 3) Maintain accurate proportions, poses, and spatial relationships between elements, 4) Keep recognizable details like facial features, clothing patterns, logos, text, or unique markings, 5) Use the actual color palette from the photo - do not change or stylize colors unless necessary for print quality, 6) Create clean vector-style edges with smooth curves around the subject, 7) CENTER the main subject PERFECTLY in the image frame with equal padding on all sides - the subject should be in the exact center both horizontally and vertically, 8) Add minimum 0.125 inch (3mm) bleed area around each design, 9) Avoid fine details smaller than 0.1 inch but preserve character-defining features, 10) Use bold, clear outlines while maintaining subject accuracy, 11) Ensure designs work at 3x3 inch minimum size, 12) Make the subject fill approximately 85-90% of the frame for optimal viewing and consistent sizing. The goal is photographic accuracy transformed into perfectly centered, transparent sticker format with the subject filling most of the frame.';
@@ -36,6 +39,7 @@ const DEFAULT_SETTINGS: AdminSettings = {
   initialGenerationPrompt: DEFAULT_INITIAL_GENERATION_PROMPT,
   regenerationPrompt: DEFAULT_REGENERATION_PROMPT,
   editPrompt: DEFAULT_EDIT_PROMPT,
+  editModel: 'nano-banana',
 };
 
 export async function getAdminSettings(): Promise<AdminSettings> {
@@ -67,6 +71,7 @@ export default function AdminSettings() {
     type: 'initial' | 'regeneration' | 'edit';
     value: string;
   } | null>(null);
+  const [selectedModel, setSelectedModel] = useState<EditModel>('nano-banana');
 
   useEffect(() => {
     loadSettings();
@@ -75,6 +80,7 @@ export default function AdminSettings() {
   const loadSettings = async () => {
     const loaded = await getAdminSettings();
     setSettings(loaded);
+    setSelectedModel(loaded.editModel || 'nano-banana');
   };
 
   const handleSavePrompt = async (type: 'initial' | 'regeneration' | 'edit', value: string) => {
@@ -357,6 +363,67 @@ export default function AdminSettings() {
               )}
             </View>
           </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Edit Model Selection</Text>
+            <Text style={styles.helpText}>
+              Choose which AI model to use for sticker editing.
+            </Text>
+
+            <View style={styles.modelSelectionContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.modelOption,
+                  selectedModel === 'nano-banana' && styles.modelOptionSelected,
+                ]}
+                onPress={async () => {
+                  setSelectedModel('nano-banana');
+                  const updatedSettings = { ...settings, editModel: 'nano-banana' as EditModel };
+                  await saveAdminSettings(updatedSettings);
+                  setSettings(updatedSettings);
+                  Alert.alert('Success', 'Model updated to Nano Banana');
+                }}
+              >
+                <View style={styles.modelOptionContent}>
+                  <Text style={styles.modelOptionTitle}>Nano Banana</Text>
+                  <Text style={styles.modelOptionDescription}>
+                    Google Gemini 2.5 Flash - Fast and reliable image editing
+                  </Text>
+                </View>
+                {selectedModel === 'nano-banana' && (
+                  <View style={styles.selectedBadge}>
+                    <Text style={styles.selectedBadgeText}>✓</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.modelOption,
+                  selectedModel === 'seedream' && styles.modelOptionSelected,
+                ]}
+                onPress={async () => {
+                  setSelectedModel('seedream');
+                  const updatedSettings = { ...settings, editModel: 'seedream' as EditModel };
+                  await saveAdminSettings(updatedSettings);
+                  setSettings(updatedSettings);
+                  Alert.alert('Success', 'Model updated to SeeDream');
+                }}
+              >
+                <View style={styles.modelOptionContent}>
+                  <Text style={styles.modelOptionTitle}>SeeDream v4</Text>
+                  <Text style={styles.modelOptionDescription}>
+                    ByteDance SeeDream - Advanced image editing with high quality output
+                  </Text>
+                </View>
+                {selectedModel === 'seedream' && (
+                  <View style={styles.selectedBadge}>
+                    <Text style={styles.selectedBadgeText}>✓</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -514,5 +581,50 @@ const styles = StyleSheet.create({
   },
   resetButton: {
     padding: 4,
+  },
+  modelSelectionContainer: {
+    marginTop: 16,
+    gap: 12,
+  },
+  modelOption: {
+    backgroundColor: colors.background,
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modelOptionSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.white,
+  },
+  modelOptionContent: {
+    flex: 1,
+  },
+  modelOptionTitle: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: colors.text.primary,
+    marginBottom: 4,
+  },
+  modelOptionDescription: {
+    fontSize: 13,
+    color: colors.text.secondary,
+    lineHeight: 18,
+  },
+  selectedBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectedBadgeText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: 'bold' as const,
   },
 });
