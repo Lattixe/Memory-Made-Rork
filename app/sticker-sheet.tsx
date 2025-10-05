@@ -600,27 +600,21 @@ const StickerSheetScreen = memo(() => {
           if (ratio > 1) {
             drawW = boxWidth;
             drawH = boxWidth / ratio;
-            if (drawH > boxHeight) {
-              drawH = boxHeight;
-              drawW = boxHeight * ratio;
-            }
           } else if (ratio < 1) {
             drawH = boxHeight;
             drawW = boxHeight * ratio;
-            if (drawW > boxWidth) {
-              drawW = boxWidth;
-              drawH = boxWidth / ratio;
-            }
           } else {
-            const minDim = Math.min(boxWidth, boxHeight);
-            drawW = minDim;
-            drawH = minDim;
+            drawW = Math.min(boxWidth, boxHeight);
+            drawH = drawW;
           }
           
-          console.log(`[generateStickerSheetWeb] Sticker: ${stickerPos.id}, Natural: ${naturalW}x${naturalH}, Box: ${boxWidth.toFixed(0)}x${boxHeight.toFixed(0)}, Draw: ${drawW.toFixed(0)}x${drawH.toFixed(0)}`);
+          const offsetX = (boxWidth - drawW) / 2;
+          const offsetY = (boxHeight - drawH) / 2;
+          
+          console.log(`[generateStickerSheetWeb] Sticker: ${stickerPos.id}, Natural: ${naturalW}x${naturalH}, Ratio: ${ratio.toFixed(2)}, Box: ${boxWidth.toFixed(0)}x${boxHeight.toFixed(0)}, Draw: ${drawW.toFixed(0)}x${drawH.toFixed(0)}, Offset: ${offsetX.toFixed(0)},${offsetY.toFixed(0)}`);
           
           ctx.save();
-          ctx.translate(x + boxWidth / 2, y + boxHeight / 2);
+          ctx.translate(x + offsetX + drawW / 2, y + offsetY + drawH / 2);
           ctx.rotate((stickerPos.rotation * Math.PI) / 180);
           ctx.drawImage(
             img,
