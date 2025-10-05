@@ -444,10 +444,163 @@ async function defringeAndDespeckle(base64Image: string, options?: PostProcessOp
   });
 }
 
+export async function addStrokeToImage(base64Image: string, strokeWidth: number = 3, strokeColor: string = '#FFFFFF'): Promise<string> {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') {
+    return base64Image;
+  }
+
+  return new Promise((resolve) => {
+    const timeoutId = setTimeout(() => {
+      console.log('Stroke addition timeout - using original');
+      resolve(base64Image);
+    }, 2000);
+    
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      
+      if (!ctx) {
+        clearTimeout(timeoutId);
+        resolve(base64Image);
+        return;
+      }
+      
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      img.onload = () => {
+        try {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          
+          // Draw original image
+          ctx.drawImage(img, 0, 0);
+          
+          // Get image data to create stroke from alpha channel
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          
+          // Create a temporary canvas for the stroke
+          const strokeCanvas = document.createElement('canvas');
+          strokeCanvas.width = canvas.width;
+          strokeCanvas.height = canvas.height;
+          const strokeCtx = strokeCanvas.getContext('2d');
+          
+          if (!strokeCtx) {
+            clearTimeout(timeoutId);
+            resolve(base64Image);
+            return;
+          }
+          
+          // Create stroke by dilating the alpha channel
+          const strokeData = strokeCtx.createImageData(canvas.width, canvas.height);
+          const stroke = strokeData.data;
+          
+          // Parse stroke color
+          const r = parseInt(strokeColor.slice(1, 3), 16);
+          const g = parseInt(strokeColor.slice(3, 5), 16);
+          const b = parseInt(strokeColor.slice(5, 7), 16);
+          
+          // Dilate alpha channel to create stroke
+          for (let y = 0; y < canvas.height; y++) {
+            for (let x = 0; x < canvas.width; x++) {
+              const idx = (y * canvas.width + x) * 4;
+              const alpha = data[idx + 3];
+              
+              // If pixel is transparent, check if it's near an opaque pixel
+              if (alpha < 128) {
+                let hasOpaqueNeighbor = false;
+                
+                // Check neighbors within strokeWidth radius
+                for (let dy = -strokeWidth; dy <= strokeWidth; dy++) {
+                  for (let dx = -strokeWidth; dx <= strokeWidth; dx++) {
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    
+                    // Check if within bounds
+                    if (nx >= 0 && nx < canvas.width && ny >= 0 && ny < canvas.height) {
+                      const nIdx = (ny * canvas.width + nx) * 4;
+                      const nAlpha = data[nIdx + 3];
+                      
+                      // If neighbor is opaque, this pixel should be part of stroke
+                      if (nAlpha >= 128) {
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        if (distance <= strokeWidth) {
+                          hasOpaqueNeighbor = true;
+                          break;
+                        }
+                      }
+                    }
+                  }
+                  if (hasOpaqueNeighbor) break;
+                }
+                
+                // Add stroke pixel
+                if (hasOpaqueNeighbor) {
+                  stroke[idx] = r;
+                  stroke[idx + 1] = g;
+                  stroke[idx + 2] = b;
+                  stroke[idx + 3] = 255;
+                }
+              }
+            }
+          }
+          
+          // Draw stroke first
+          strokeCtx.putImageData(strokeData, 0, 0);
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(strokeCanvas, 0, 0);
+          
+          // Draw original image on top
+          ctx.drawImage(img, 0, 0);
+          
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                clearTimeout(timeoutId);
+                resolve(base64Image);
+                return;
+              }
+              
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const result = reader.result as string;
+                const base64Result = result.split(',')[1];
+                clearTimeout(timeoutId);
+                console.log('Stroke added successfully');
+                resolve(base64Result);
+              };
+              reader.readAsDataURL(blob);
+            },
+            'image/png',
+            1.0
+          );
+        } catch (error) {
+          clearTimeout(timeoutId);
+          console.error('Error adding stroke:', error);
+          resolve(base64Image);
+        }
+      };
+      
+      img.onerror = () => {
+        clearTimeout(timeoutId);
+        resolve(base64Image);
+      };
+      
+      img.src = `data:image/png;base64,${base64Image}`;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      console.error('Error in stroke addition:', error);
+      resolve(base64Image);
+    }
+  });
+}
+
 export async function processStickerImage(
   base64Image: string,
   skipBackgroundRemoval: boolean = false,
-  isAIGenerated: boolean = true
+  isAIGenerated: boolean = true,
+  addStroke: boolean = true
 ): Promise<string> {
   try {
     console.log('Processing sticker image...');
@@ -463,6 +616,16 @@ export async function processStickerImage(
       });
       const removalPromise = removeBackground(base64Image, !isAIGenerated);
       processedImage = await Promise.race([removalPromise, timeoutPromise]);
+    }
+
+    // Add stroke to preserve cut line after background removal
+    if (addStroke && Platform.OS === 'web') {
+      try {
+        console.log('Adding white stroke to preserve cut line...');
+        processedImage = await addStrokeToImage(processedImage, 3, '#FFFFFF');
+      } catch (strokeError) {
+        console.log('Stroke addition failed, continuing without stroke');
+      }
     }
 
     if (Platform.OS === 'web') {
