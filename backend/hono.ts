@@ -135,6 +135,17 @@ app.post('/rmbg', async (c) => {
   }
 });
 
+// Test endpoint to verify Replicate API token
+app.get("/test-replicate", (c) => {
+  const token = process.env.REPLICATE_API_TOKEN;
+  console.log('[backend] Replicate token check:', token ? `Token present (${token.substring(0, 8)}...)` : 'Token missing');
+  return c.json({ 
+    status: token ? "configured" : "missing",
+    message: token ? "Replicate API token is configured" : "REPLICATE_API_TOKEN environment variable is not set",
+    tokenPrefix: token ? token.substring(0, 8) : null
+  });
+});
+
 // Simple health check endpoint
 app.get("/", (c) => {
   console.log('[backend] Health check endpoint hit');
@@ -152,7 +163,8 @@ app.get("/debug", (c) => {
       health: "/api/",
       trpc: "/api/trpc",
       debug: "/api/debug",
-      rmbg: "/api/rmbg"
+      rmbg: "/api/rmbg",
+      testReplicate: "/api/test-replicate"
     }
   });
 });
