@@ -31,23 +31,45 @@ export default function StickerSheetPreview({
   }
 
   const [cols, rows] = stickerOption.grid;
-  const aspect = cols && rows ? cols / rows : 1;
+  const stickers: number[] = [];
+  for (let i = 0; i < stickerCount; i++) {
+    stickers.push(i);
+  }
 
   return (
     <View style={styles.container} testID="sticker-sheet-preview-root">
       <View style={styles.sheetBorder}>
-        <View
-          style={[
-            styles.sheetCanvas,
-            { aspectRatio: aspect },
-          ]}
-          testID="sticker-sheet-canvas"
-        >
-          <Image
-            source={{ uri: stickerImage }}
-            style={styles.sheetImage}
-            resizeMode="contain"
-          />
+        <View style={styles.sheetCanvas} testID="sticker-sheet-canvas">
+          <View style={styles.gridContainer}>
+            {Array.from({ length: rows }).map((_, rowIndex) => (
+              <View key={`row-${rowIndex}`} style={styles.gridRow}>
+                {Array.from({ length: cols }).map((_, colIndex) => {
+                  const stickerIndex = rowIndex * cols + colIndex;
+                  const isVisible = stickerIndex < stickerCount;
+                  
+                  return (
+                    <View
+                      key={`sticker-${rowIndex}-${colIndex}`}
+                      style={[
+                        styles.stickerCell,
+                        { flex: 1 / cols },
+                      ]}
+                    >
+                      {isVisible && (
+                        <View style={styles.stickerWrapper}>
+                          <Image
+                            source={{ uri: stickerImage }}
+                            style={styles.stickerImage}
+                            resizeMode="contain"
+                          />
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            ))}
+          </View>
         </View>
       </View>
     </View>
@@ -66,12 +88,38 @@ const styles = StyleSheet.create({
     borderColor: neutralColors.border,
   },
   sheetCanvas: {
-    backgroundColor: neutralColors.background,
+    backgroundColor: '#f5f5f5',
     borderRadius: 14,
     overflow: 'hidden',
-    width: '100%',
+    aspectRatio: 1,
+    padding: 8,
   },
-  sheetImage: {
+  gridContainer: {
+    flex: 1,
+    gap: 6,
+  },
+  gridRow: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 6,
+  },
+  stickerCell: {
+    aspectRatio: 1,
+  },
+  stickerWrapper: {
+    flex: 1,
+    backgroundColor: neutralColors.white,
+    borderRadius: 8,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: neutralColors.border,
+    shadowColor: neutralColors.gray900,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  stickerImage: {
     width: '100%',
     height: '100%',
   },

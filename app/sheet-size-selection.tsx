@@ -8,9 +8,10 @@ import {
   Alert,
   ScrollView,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, Grid3X3, Check, Layers } from 'lucide-react-native';
+import { ArrowLeft, Grid3X3 } from 'lucide-react-native';
 import { neutralColors } from '@/constants/colors';
 import { STICKER_SHEET_LAYOUTS, SHEET_CONSTANTS, SheetSize as LayoutSheetSize } from '@/constants/stickerSheetLayouts';
 import {
@@ -18,9 +19,9 @@ import {
   calculateDynamicLayouts,
   generateDynamicStickerSheet,
   DynamicSheetLayout,
-  DynamicLayoutOption,
 } from '@/utils/dynamicStickerLayout';
 import { router, useLocalSearchParams } from 'expo-router';
+import StickerSheetPreview from '@/components/StickerSheetPreview';
 
 type SheetSize = '3x3' | '4x4' | '5.5x5.5';
 
@@ -290,6 +291,9 @@ export default function SheetSizeSelectionScreen() {
     }
   };
 
+  const screenWidth = Dimensions.get('window').width;
+  const previewSize = Math.min(screenWidth - 80, 280);
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.safeArea}>
@@ -317,145 +321,135 @@ export default function SheetSizeSelectionScreen() {
               <Grid3X3 size={32} color={neutralColors.primary} />
               <Text style={styles.introTitle}>Custom Sticker Sheets</Text>
               <Text style={styles.introDescription}>
-                Choose your sheet size and sticker count. Each sticker is sized perfectly 
-                for planners, journals, and crafts.
+                Choose your sheet size and sticker count.
+                {currentDynamicLayout && (
+                  <Text style={styles.aspectRatioText}>
+                    {' '}Optimized for your {currentDynamicLayout.stickerDimensions.aspectRatio.toFixed(2)}:1 sticker.
+                  </Text>
+                )}
               </Text>
             </View>
 
-            <View style={styles.optionsContainer}>
-              {SHEET_CONFIGS.map((config) => (
-                <TouchableOpacity
-                  key={config.size}
-                  style={[
-                    styles.sizeOption,
-                    selectedSize === config.size && styles.sizeOptionSelected,
-                  ]}
-                  onPress={() => setSelectedSize(config.size)}
-                  disabled={isGenerating}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.sizeOptionHeader}>
-                    <View style={styles.sizeInfo}>
-                      <Text style={[
-                        styles.sizeName,
-                        selectedSize === config.size && styles.sizeNameSelected,
-                      ]}>
-                        {config.displayName}
-                      </Text>
-                      <Text style={styles.sizeDescription}>{config.description}</Text>
-                    </View>
-                    {selectedSize === config.size && (
-                      <View style={styles.checkmark}>
-                        <Check size={20} color={neutralColors.white} />
-                      </View>
-                    )}
-                  </View>
+            <View style={[styles.previewContainer, { height: previewSize + 40 }]}>
+              {isAnalyzing ? (
+                <View style={styles.loadingPreview}>
+                  <ActivityIndicator size="large" color={neutralColors.primary} />
+                  <Text style={styles.loadingText}>Analyzing sticker...</Text>
+                </View>
+              ) : (
+                <View style={[styles.previewWrapper, { width: previewSize, height: previewSize }]}>
+                  <StickerSheetPreview
+                    stickerImage={stickerImage}
+                    sheetSize={selectedSize}
+                    stickerCount={currentStickerCount}
+                  />
+                </View>
+              )}
+            </View>
 
-                  <View style={styles.sizeDetails}>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Sheet Size:</Text>
-                      <Text style={styles.detailValue}>{config.displayName}</Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Available Options:</Text>
-                      <Text style={styles.detailValue}>
-                        {dynamicLayouts[config.size]?.options.length || STICKER_SHEET_LAYOUTS[config.size as LayoutSheetSize].options.length} layouts
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.priceContainer}>
+            <View style={styles.configSection}>
+              <View style={styles.configHeader}>
+                <Text style={styles.configTitle}>Sheet Size</Text>
+                <Text style={styles.configValue}>
+                  {SHEET_CONFIGS.find(c => c.size === selectedSize)?.displayName}
+                </Text>
+              </View>
+              
+              <View style={styles.sizeSelector}>
+                {SHEET_CONFIGS.map((config) => (
+                  <TouchableOpacity
+                    key={config.size}
+                    style={[
+                      styles.sizeButton,
+                      selectedSize === config.size && styles.sizeButtonSelected,
+                    ]}
+                    onPress={() => setSelectedSize(config.size)}
+                    disabled={isGenerating}
+                    activeOpacity={0.7}
+                  >
                     <Text style={[
-                      styles.price,
-                      selectedSize === config.size && styles.priceSelected,
+                      styles.sizeButtonText,
+                      selectedSize === config.size && styles.sizeButtonTextSelected,
+                    ]}>
+                      {config.displayName}
+                    </Text>
+                    <Text style={[
+                      styles.sizeButtonPrice,
+                      selectedSize === config.size && styles.sizeButtonPriceSelected,
                     ]}>
                       ${config.price.toFixed(2)}
                     </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
 
-            {selectedSize && (
-              <View style={styles.stickerCountSection}>
-                <View style={styles.sectionHeader}>
-                  <Layers size={24} color={neutralColors.primary} />
-                  <Text style={styles.sectionTitle}>Choose Sticker Count</Text>
-                </View>
-                <Text style={styles.sectionDescription}>
-                  {currentDynamicLayout
-                    ? `Optimized for your sticker's ${currentDynamicLayout.stickerDimensions.aspectRatio.toFixed(2)}:1 aspect ratio`
-                    : `Select how many stickers you want on your ${currentLayout.displayName} sheet`}
+            <View style={styles.configSection}>
+              <View style={styles.configHeader}>
+                <Text style={styles.configTitle}>Sticker Count</Text>
+                <Text style={styles.configValue}>
+                  {currentStickerCount} stickers
                 </Text>
-                
-                <View style={styles.countOptionsContainer}>
-                  {(currentDynamicLayout?.options || currentLayout.options).map((option) => (
-                    <TouchableOpacity
-                      key={option.count}
-                      style={[
-                        styles.countOption,
-                        currentStickerCount === option.count && styles.countOptionSelected,
-                      ]}
-                      onPress={() => setSelectedStickerCount(option.count)}
-                      disabled={isGenerating}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.countOptionHeader}>
-                        <Text style={[
-                          styles.countOptionName,
-                          currentStickerCount === option.count && styles.countOptionNameSelected,
-                        ]}>
-                          {option.displayName}
-                        </Text>
-                        {currentStickerCount === option.count && (
-                          <View style={styles.countCheckmark}>
-                            <Check size={16} color={neutralColors.white} />
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.countOptionDescription}>{option.description}</Text>
-                      <View style={styles.countOptionDetails}>
-                        <Text style={styles.countOptionDetail}>
-                          {option.grid[0]}×{option.grid[1]} grid
-                        </Text>
-                        <Text style={styles.countOptionDetail}>•</Text>
-                        <Text style={styles.countOptionDetail}>
-                          {option.count} stickers
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </View>
               </View>
-            )}
+              
+              <View style={styles.countSelector}>
+                {(currentDynamicLayout?.options || currentLayout.options).map((option) => (
+                  <TouchableOpacity
+                    key={option.count}
+                    style={[
+                      styles.countButton,
+                      currentStickerCount === option.count && styles.countButtonSelected,
+                    ]}
+                    onPress={() => setSelectedStickerCount(option.count)}
+                    disabled={isGenerating}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      styles.countButtonNumber,
+                      currentStickerCount === option.count && styles.countButtonNumberSelected,
+                    ]}>
+                      {option.count}
+                    </Text>
+                    <Text style={[
+                      styles.countButtonLabel,
+                      currentStickerCount === option.count && styles.countButtonLabelSelected,
+                    ]}>
+                      {option.displayName}
+                    </Text>
+                    <Text style={[
+                      styles.countButtonGrid,
+                      currentStickerCount === option.count && styles.countButtonGridSelected,
+                    ]}>
+                      {option.grid[0]}×{option.grid[1]}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
 
-            <View style={styles.featuresSection}>
-              <Text style={styles.featuresTitle}>What You Get:</Text>
-              <View style={styles.featuresList}>
-                <View style={styles.featureItem}>
-                  <Text style={styles.featureBullet}>•</Text>
-                  <Text style={styles.featureText}>
-                    Professional kiss-cut stickers with white border
-                  </Text>
-                </View>
-                <View style={styles.featureItem}>
-                  <Text style={styles.featureBullet}>•</Text>
-                  <Text style={styles.featureText}>
-                    High-quality 300 DPI print resolution
-                  </Text>
-                </View>
-                <View style={styles.featureItem}>
-                  <Text style={styles.featureBullet}>•</Text>
-                  <Text style={styles.featureText}>
-                    Safe margins and proper bleed for clean cuts
-                  </Text>
-                </View>
-                <View style={styles.featureItem}>
-                  <Text style={styles.featureBullet}>•</Text>
-                  <Text style={styles.featureText}>
-                    Each mini sticker peels independently
-                  </Text>
-                </View>
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Sheet Size</Text>
+                <Text style={styles.summaryValue}>
+                  {SHEET_CONFIGS.find(c => c.size === selectedSize)?.displayName}
+                </Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Total Stickers</Text>
+                <Text style={styles.summaryValue}>{currentStickerCount}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Grid Layout</Text>
+                <Text style={styles.summaryValue}>
+                  {(currentDynamicLayout?.options || currentLayout.options)
+                    .find(opt => opt.count === currentStickerCount)?.grid.join(' × ')}
+                </Text>
+              </View>
+              <View style={[styles.summaryRow, styles.summaryRowTotal]}>
+                <Text style={styles.summaryLabelTotal}>Total Price</Text>
+                <Text style={styles.summaryValueTotal}>
+                  ${SHEET_CONFIGS.find(c => c.size === selectedSize)?.price.toFixed(2)}
+                </Text>
               </View>
             </View>
           </View>
@@ -535,14 +529,14 @@ const styles = StyleSheet.create({
   },
   introSection: {
     alignItems: 'center',
-    marginBottom: 32,
-    paddingVertical: 20,
+    marginBottom: 24,
+    paddingVertical: 16,
   },
   introTitle: {
     fontSize: 24,
     fontWeight: '700' as const,
     color: neutralColors.text.primary,
-    marginTop: 16,
+    marginTop: 12,
     marginBottom: 8,
     textAlign: 'center',
   },
@@ -553,122 +547,170 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     maxWidth: 320,
   },
-  optionsContainer: {
-    gap: 16,
-    marginBottom: 32,
+  aspectRatioText: {
+    fontSize: 14,
+    color: neutralColors.primary,
+    fontWeight: '600' as const,
   },
-  sizeOption: {
+  previewContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 32,
+    paddingVertical: 20,
+  },
+  loadingPreview: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: neutralColors.text.secondary,
+  },
+  previewWrapper: {
+    shadowColor: neutralColors.gray900,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  configSection: {
+    marginBottom: 24,
+  },
+  configHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  configTitle: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: neutralColors.text.primary,
+  },
+  configValue: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: neutralColors.primary,
+  },
+  sizeSelector: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  sizeButton: {
+    flex: 1,
     backgroundColor: neutralColors.white,
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 12,
+    padding: 16,
     borderWidth: 2,
     borderColor: neutralColors.border,
-    shadowColor: neutralColors.gray900,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    alignItems: 'center',
   },
-  sizeOptionSelected: {
+  sizeButtonSelected: {
     borderColor: neutralColors.primary,
     backgroundColor: neutralColors.primary + '08',
   },
-  sizeOptionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  sizeInfo: {
-    flex: 1,
-  },
-  sizeName: {
-    fontSize: 20,
+  sizeButtonText: {
+    fontSize: 16,
     fontWeight: '700' as const,
     color: neutralColors.text.primary,
     marginBottom: 4,
   },
-  sizeNameSelected: {
+  sizeButtonTextSelected: {
     color: neutralColors.primary,
   },
-  sizeDescription: {
+  sizeButtonPrice: {
     fontSize: 13,
-    color: neutralColors.text.secondary,
-  },
-  checkmark: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: neutralColors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sizeDetails: {
-    gap: 8,
-    marginBottom: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: neutralColors.border,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  detailLabel: {
-    fontSize: 14,
-    color: neutralColors.text.secondary,
-  },
-  detailValue: {
-    fontSize: 14,
     fontWeight: '600' as const,
-    color: neutralColors.text.primary,
+    color: neutralColors.text.secondary,
   },
-  priceContainer: {
-    alignItems: 'flex-end',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: neutralColors.border,
+  sizeButtonPriceSelected: {
+    color: neutralColors.primary,
   },
-  price: {
-    fontSize: 24,
+  countSelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  countButton: {
+    backgroundColor: neutralColors.white,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 2,
+    borderColor: neutralColors.border,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  countButtonSelected: {
+    borderColor: neutralColors.primary,
+    backgroundColor: neutralColors.primary + '08',
+  },
+  countButtonNumber: {
+    fontSize: 20,
     fontWeight: '700' as const,
     color: neutralColors.text.primary,
+    marginBottom: 2,
   },
-  priceSelected: {
+  countButtonNumberSelected: {
     color: neutralColors.primary,
   },
-  featuresSection: {
-    backgroundColor: neutralColors.surface,
+  countButtonLabel: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: neutralColors.text.secondary,
+    marginBottom: 2,
+  },
+  countButtonLabelSelected: {
+    color: neutralColors.primary,
+  },
+  countButtonGrid: {
+    fontSize: 10,
+    color: neutralColors.text.tertiary,
+  },
+  countButtonGridSelected: {
+    color: neutralColors.primary,
+  },
+  summaryCard: {
+    backgroundColor: neutralColors.white,
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
     borderColor: neutralColors.border,
+    marginTop: 8,
   },
-  featuresTitle: {
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: neutralColors.border,
+  },
+  summaryRowTotal: {
+    borderBottomWidth: 0,
+    paddingTop: 16,
+    marginTop: 6,
+    borderTopWidth: 2,
+    borderTopColor: neutralColors.border,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: neutralColors.text.secondary,
+  },
+  summaryValue: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: neutralColors.text.primary,
+  },
+  summaryLabelTotal: {
     fontSize: 16,
     fontWeight: '600' as const,
     color: neutralColors.text.primary,
-    marginBottom: 12,
   },
-  featuresList: {
-    gap: 10,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  featureBullet: {
-    fontSize: 16,
-    color: neutralColors.primary,
+  summaryValueTotal: {
+    fontSize: 24,
     fontWeight: '700' as const,
-  },
-  featureText: {
-    flex: 1,
-    fontSize: 14,
-    color: neutralColors.text.secondary,
-    lineHeight: 20,
+    color: neutralColors.primary,
   },
   footer: {
     position: 'absolute',
@@ -704,81 +746,5 @@ const styles = StyleSheet.create({
     color: neutralColors.white,
     fontSize: 16,
     fontWeight: '600' as const,
-  },
-  stickerCountSection: {
-    marginBottom: 32,
-    backgroundColor: neutralColors.white,
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: neutralColors.border,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700' as const,
-    color: neutralColors.text.primary,
-  },
-  sectionDescription: {
-    fontSize: 14,
-    color: neutralColors.text.secondary,
-    marginBottom: 20,
-    lineHeight: 20,
-  },
-  countOptionsContainer: {
-    gap: 12,
-  },
-  countOption: {
-    backgroundColor: neutralColors.surface,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: neutralColors.border,
-  },
-  countOptionSelected: {
-    borderColor: neutralColors.primary,
-    backgroundColor: neutralColors.primary + '08',
-  },
-  countOptionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  countOptionName: {
-    fontSize: 16,
-    fontWeight: '600' as const,
-    color: neutralColors.text.primary,
-  },
-  countOptionNameSelected: {
-    color: neutralColors.primary,
-  },
-  countCheckmark: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: neutralColors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  countOptionDescription: {
-    fontSize: 13,
-    color: neutralColors.text.secondary,
-    marginBottom: 8,
-  },
-  countOptionDetails: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  countOptionDetail: {
-    fontSize: 12,
-    color: neutralColors.text.secondary,
-    fontWeight: '500' as const,
   },
 });
