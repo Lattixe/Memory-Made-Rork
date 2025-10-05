@@ -473,86 +473,77 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
           canvas.width = img.width;
           canvas.height = img.height;
           
-          // Draw the sticker image (already has transparent background)
           ctx.drawImage(img, 0, 0);
           
-          // Get image data to create stroke from the sticker's alpha channel
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const data = imageData.data;
           
-          // Create a temporary canvas for the stroke
-          const strokeCanvas = document.createElement('canvas');
-          strokeCanvas.width = canvas.width;
-          strokeCanvas.height = canvas.height;
-          const strokeCtx = strokeCanvas.getContext('2d');
+          const w = canvas.width;
+          const h = canvas.height;
           
-          if (!strokeCtx) {
-            clearTimeout(timeoutId);
-            resolve(base64Image);
-            return;
+          const alphaMap = new Uint8Array(w * h);
+          for (let i = 0; i < data.length; i += 4) {
+            alphaMap[i / 4] = data[i + 3];
           }
           
-          // Create stroke by dilating the alpha channel
-          const strokeData = strokeCtx.createImageData(canvas.width, canvas.height);
-          const stroke = strokeData.data;
+          const dilatedAlpha = new Uint8Array(w * h);
           
-          // Parse stroke color
           const r = parseInt(strokeColor.slice(1, 3), 16);
           const g = parseInt(strokeColor.slice(3, 5), 16);
           const b = parseInt(strokeColor.slice(5, 7), 16);
           
-          // Dilate alpha channel to create stroke
-          for (let y = 0; y < canvas.height; y++) {
-            for (let x = 0; x < canvas.width; x++) {
-              const idx = (y * canvas.width + x) * 4;
-              const alpha = data[idx + 3];
-              
-              // If pixel is transparent, check if it's near an opaque pixel
-              if (alpha < 128) {
-                let hasOpaqueNeighbor = false;
+          for (let iter = 0; iter < strokeWidth; iter++) {
+            const source = iter === 0 ? alphaMap : dilatedAlpha;
+            const target = new Uint8Array(w * h);
+            
+            for (let y = 0; y < h; y++) {
+              for (let x = 0; x < w; x++) {
+                const idx = y * w + x;
+                let maxAlpha = source[idx];
                 
-                // Check neighbors within strokeWidth radius
-                for (let dy = -strokeWidth; dy <= strokeWidth; dy++) {
-                  for (let dx = -strokeWidth; dx <= strokeWidth; dx++) {
+                for (let dy = -1; dy <= 1; dy++) {
+                  for (let dx = -1; dx <= 1; dx++) {
                     const nx = x + dx;
                     const ny = y + dy;
                     
-                    // Check if within bounds
-                    if (nx >= 0 && nx < canvas.width && ny >= 0 && ny < canvas.height) {
-                      const nIdx = (ny * canvas.width + nx) * 4;
-                      const nAlpha = data[nIdx + 3];
-                      
-                      // If neighbor is opaque, this pixel should be part of stroke
-                      if (nAlpha >= 128) {
-                        const distance = Math.sqrt(dx * dx + dy * dy);
-                        if (distance <= strokeWidth) {
-                          hasOpaqueNeighbor = true;
-                          break;
-                        }
-                      }
+                    if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                      const nIdx = ny * w + nx;
+                      maxAlpha = Math.max(maxAlpha, source[nIdx]);
                     }
                   }
-                  if (hasOpaqueNeighbor) break;
                 }
                 
-                // Add stroke pixel
-                if (hasOpaqueNeighbor) {
-                  stroke[idx] = r;
-                  stroke[idx + 1] = g;
-                  stroke[idx + 2] = b;
-                  stroke[idx + 3] = 255;
-                }
+                target[idx] = maxAlpha;
               }
+            }
+            
+            dilatedAlpha.set(target);
+          }
+          
+          const strokeData = ctx.createImageData(w, h);
+          const strokePixels = strokeData.data;
+          
+          for (let i = 0; i < w * h; i++) {
+            const originalAlpha = alphaMap[i];
+            const dilatedAlphaValue = dilatedAlpha[i];
+            
+            const idx = i * 4;
+            
+            if (originalAlpha < 128 && dilatedAlphaValue >= 128) {
+              strokePixels[idx] = r;
+              strokePixels[idx + 1] = g;
+              strokePixels[idx + 2] = b;
+              strokePixels[idx + 3] = 255;
+            } else if (originalAlpha >= 128) {
+              strokePixels[idx] = data[idx];
+              strokePixels[idx + 1] = data[idx + 1];
+              strokePixels[idx + 2] = data[idx + 2];
+              strokePixels[idx + 3] = data[idx + 3];
             }
           }
           
-          // Clear canvas and draw stroke first (underneath)
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          strokeCtx.putImageData(strokeData, 0, 0);
-          ctx.drawImage(strokeCanvas, 0, 0);
-          
-          // Draw the sticker on top of the stroke
-          ctx.drawImage(img, 0, 0);
+          ctx.clearRect(0, 0, w, h);
+          ctx.putImageData(strokeData, 0, 0);
           
           canvas.toBlob(
             (blob) => {
@@ -567,7 +558,7 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
                 const result = reader.result as string;
                 const base64Result = result.split(',')[1];
                 clearTimeout(timeoutId);
-                console.log('Stroke added successfully');
+                console.log('Clean stroke added successfully');
                 resolve(base64Result);
               };
               reader.readAsDataURL(blob);
