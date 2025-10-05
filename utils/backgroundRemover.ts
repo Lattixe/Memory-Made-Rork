@@ -1,5 +1,4 @@
 import { Platform } from 'react-native';
-import { getAdminSettings } from '@/app/admin';
 
 export async function removeBackground(base64Image: string, aggressive: boolean = true): Promise<string> {
   console.log('Starting optimized background removal...');
@@ -464,22 +463,6 @@ export async function processStickerImage(
       });
       const removalPromise = removeBackground(base64Image, !isAIGenerated);
       processedImage = await Promise.race([removalPromise, timeoutPromise]);
-
-      const adminSettings = await getAdminSettings();
-      if (adminSettings.enablePostProcessing) {
-        try {
-          console.log('Applying post-processing with settings:', adminSettings);
-          processedImage = await defringeAndDespeckle(processedImage, {
-            alphaThreshold: adminSettings.alphaThreshold,
-            fringeErode: adminSettings.fringeErode,
-            despeckleSize: adminSettings.despeckleSize,
-          });
-        } catch (ppErr) {
-          console.log('Post-process failed, continuing');
-        }
-      } else {
-        console.log('Post-processing disabled in admin settings');
-      }
     }
 
     if (Platform.OS === 'web') {
