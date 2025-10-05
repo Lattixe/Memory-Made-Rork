@@ -292,7 +292,8 @@ export default function SheetSizeSelectionScreen() {
   };
 
   const screenWidth = Dimensions.get('window').width;
-  const previewSize = Math.min(screenWidth - 80, 280);
+  const screenHeight = Dimensions.get('window').height;
+  const previewSize = Math.min(screenWidth - 32, screenHeight * 0.45);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -524,27 +525,27 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   content: {
-    padding: 20,
+    padding: 16,
     paddingBottom: 100,
   },
   introSection: {
     alignItems: 'center',
-    marginBottom: 24,
-    paddingVertical: 16,
+    marginBottom: 16,
+    paddingVertical: 12,
   },
   introTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700' as const,
     color: neutralColors.text.primary,
-    marginTop: 12,
-    marginBottom: 8,
+    marginTop: 8,
+    marginBottom: 6,
     textAlign: 'center',
   },
   introDescription: {
-    fontSize: 15,
+    fontSize: 14,
     color: neutralColors.text.secondary,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 20,
     maxWidth: 320,
   },
   aspectRatioText: {
@@ -555,8 +556,8 @@ const styles = StyleSheet.create({
   previewContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 32,
-    paddingVertical: 20,
+    marginBottom: 24,
+    paddingVertical: 8,
   },
   loadingPreview: {
     alignItems: 'center',
@@ -569,13 +570,13 @@ const styles = StyleSheet.create({
   },
   previewWrapper: {
     shadowColor: neutralColors.gray900,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
   },
   configSection: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   configHeader: {
     flexDirection: 'row',
