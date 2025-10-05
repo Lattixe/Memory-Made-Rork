@@ -56,11 +56,41 @@ const SHEET_CONFIGS: SheetConfig[] = [
   },
 ];
 
+const filterValidOptions = (layout: DynamicSheetLayout, size: SheetSize): DynamicSheetLayout | null => {
+  const staticLayout = STICKER_SHEET_LAYOUTS[size as LayoutSheetSize];
+  const validCounts = new Set(staticLayout.options.map(opt => opt.count));
+  
+  const validOptions = layout.options.filter(opt => validCounts.has(opt.count));
+  
+  if (validOptions.length === 0) {
+    console.warn(`[Dynamic Layout] No valid options for ${size}, falling back to static layout`);
+    return null;
+  }
+  
+  const validRecommended = validOptions.find(opt => opt.count === layout.recommendedOption.count) || validOptions[0];
+  
+  return {
+    ...layout,
+    options: validOptions,
+    recommendedOption: validRecommended,
+  };
+};
+
 export default function SheetSizeSelectionScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const stickerImage = typeof params.stickerImage === 'string' ? params.stickerImage : '';
   const originalImage = typeof params.originalImage === 'string' ? params.originalImage : '';
+
+  const [selectedSize, setSelectedSize] = useState<SheetSize>('4x4');
+  const [selectedStickerCount, setSelectedStickerCount] = useState<number | null>(null);
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [dynamicLayouts, setDynamicLayouts] = useState<Record<SheetSize, DynamicSheetLayout | null>>({
+    '3x3': null,
+    '4x4': null,
+    '5.5x5.5': null,
+  });
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(true);
 
   useEffect(() => {
     async function analyzeStickerDimensions() {
@@ -78,7 +108,15 @@ export default function SheetSizeSelectionScreen() {
         };
         
         console.log('[Dynamic Layout] Generated layouts:', layouts);
-        setDynamicLayouts(layouts);
+        
+        const validatedLayouts: Record<SheetSize, DynamicSheetLayout | null> = {
+          '3x3': layouts['3x3'] ? filterValidOptions(layouts['3x3'], '3x3') : null,
+          '4x4': layouts['4x4'] ? filterValidOptions(layouts['4x4'], '4x4') : null,
+          '5.5x5.5': layouts['5.5x5.5'] ? filterValidOptions(layouts['5.5x5.5'], '5.5x5.5') : null,
+        };
+        
+        console.log('[Dynamic Layout] Validated layouts:', validatedLayouts);
+        setDynamicLayouts(validatedLayouts);
       } catch (error) {
         console.error('[Dynamic Layout] Error analyzing sticker:', error);
       } finally {
@@ -88,16 +126,6 @@ export default function SheetSizeSelectionScreen() {
     
     analyzeStickerDimensions();
   }, [stickerImage]);
-  
-  const [selectedSize, setSelectedSize] = useState<SheetSize>('4x4');
-  const [selectedStickerCount, setSelectedStickerCount] = useState<number | null>(null);
-  const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [dynamicLayouts, setDynamicLayouts] = useState<Record<SheetSize, DynamicSheetLayout | null>>({
-    '3x3': null,
-    '4x4': null,
-    '5.5x5.5': null,
-  });
-  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(true);
 
   const currentDynamicLayout = dynamicLayouts[selectedSize];
   const currentLayout = STICKER_SHEET_LAYOUTS[selectedSize as LayoutSheetSize];

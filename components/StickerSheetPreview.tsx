@@ -18,9 +18,14 @@ export default function StickerSheetPreview({
   const stickerOption = getStickerOption(sheetSize, stickerCount);
 
   if (!stickerOption) {
+    console.warn(`[StickerSheetPreview] No matching option found for ${sheetSize} with ${stickerCount} stickers`);
+    console.warn(`[StickerSheetPreview] Available options:`, layout.options.map(o => o.count));
     return (
       <View style={styles.container} testID="sticker-sheet-preview-error">
         <Text style={styles.errorText}>Invalid sticker configuration</Text>
+        <Text style={styles.errorDetails}>
+          {sheetSize} sheet with {stickerCount} stickers is not available
+        </Text>
       </View>
     );
   }
@@ -75,5 +80,12 @@ const styles = StyleSheet.create({
     color: neutralColors.text.secondary,
     textAlign: 'center',
     padding: 20,
+  },
+  errorDetails: {
+    fontSize: 12,
+    color: neutralColors.text.tertiary,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
 });
