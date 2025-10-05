@@ -408,7 +408,7 @@ export default function CheckoutScreen() {
               {isStickerSheetFlow ? (
                 <View style={styles.stickerSheetPreview} testID="sticker-sheet-preview">
                   <StickerSheetPreview
-                    stickerImage={directOriginalImage || ''}
+                    stickerImage={finalStickers}
                     sheetSize={sheetSize}
                     stickerCount={stickerCount}
                   />
