@@ -8,6 +8,8 @@ import {
   Image,
   ScrollView,
   Dimensions,
+  FlatList,
+  LayoutChangeEvent,
 } from 'react-native';
 import { Trash2, ShoppingCart, Edit3, ArrowLeft, Grid3X3, Grid2X2, LayoutGrid } from 'lucide-react-native';
 import { neutralColors } from '@/constants/colors';
@@ -20,9 +22,12 @@ const GRID_PADDING = 16;
 
 type GridSize = 2 | 3 | 4;
 
-const getGridLayout = (gridSize: GridSize) => {
-  const itemGap = gridSize === 2 ? 12 : gridSize === 3 ? 8 : 4;
-  const itemWidth = (screenWidth - (GRID_PADDING * 2) - (itemGap * (gridSize - 1))) / gridSize;
+type GridLayout = { itemGap: number; itemWidth: number };
+
+const getGridLayout = (gridSize: GridSize, containerWidth?: number): GridLayout => {
+  const itemGap = gridSize === 2 ? 12 : gridSize === 3 ? 8 : 6;
+  const baseWidth = containerWidth ?? screenWidth;
+  const itemWidth = (baseWidth - GRID_PADDING * 2 - itemGap * (gridSize - 1)) / gridSize;
   return { itemGap, itemWidth };
 };
 
@@ -40,8 +45,9 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
   const [gridSize, setGridSize] = useState<GridSize>(2);
   const [selectedStickers, setSelectedStickers] = useState<Set<string>>(new Set());
   const [selectionMode, setSelectionMode] = useState<boolean>(false);
+  const [containerWidth, setContainerWidth] = useState<number | undefined>(undefined);
   
-  const { itemGap, itemWidth } = getGridLayout(gridSize);
+  const { itemGap, itemWidth } = getGridLayout(gridSize, containerWidth);
   
   const handleDeleteSticker = useCallback((sticker: SavedSticker) => {
     Alert.alert(
@@ -181,18 +187,19 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
       aspectRatio: 1,
       marginBottom: itemGap,
       marginRight: isLastInRow ? 0 : itemGap,
-    };
+    } as const;
     
     return (
       <TouchableOpacity
+        testID={`sticker-card-${item.id}`}
         key={item.id}
         style={[styles.stickerCard, cardStyle, isSelected && styles.stickerCardSelected]}
         onPress={() => {
           if (selectionMode) {
             toggleSelection(item.id);
           } else {
-            const index = stickers.findIndex(s => s.id === item.id);
-            setSelectedImageIndex(index);
+            const idx = stickers.findIndex(s => s.id === item.id);
+            setSelectedImageIndex(idx);
             setGalleryVisible(true);
           }
         }}
@@ -281,6 +288,7 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
               style={styles.gridSizeButton}
               onPress={cycleGridSize}
               activeOpacity={0.7}
+              testID="grid-size-toggle"
             >
               {gridSize === 2 && <Grid2X2 size={20} color={neutralColors.text.primary} />}
               {gridSize === 3 && <Grid3X3 size={20} color={neutralColors.text.primary} />}
@@ -290,15 +298,27 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
         </View>
       </View>
       
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.gridContainer}
-        showsVerticalScrollIndicator={false}
+      <View
+        style={styles.listContainer}
+        onLayout={(e: LayoutChangeEvent) => {
+          const w = e.nativeEvent.layout.width;
+          if (!Number.isNaN(w)) {
+            setContainerWidth(w);
+          }
+        }}
       >
-        <View style={styles.grid}>
-          {stickers.map((sticker, index) => renderStickerCard(sticker, index))}
-        </View>
-      </ScrollView>
+        <FlatList
+          testID="stickers-list"
+          data={stickers}
+          key={gridSize}
+          keyExtractor={(item) => item.id}
+          numColumns={gridSize}
+          contentContainerStyle={styles.gridContainer}
+          columnWrapperStyle={{ gap: itemGap }}
+          renderItem={({ item, index }) => renderStickerCard(item, index)}
+          showsVerticalScrollIndicator={false}
+        />
+      </View>
 
       <ImageGalleryModal
         visible={galleryVisible}
@@ -384,21 +404,18 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  listContainer: {
+    flex: 1,
+  },
   gridContainer: {
     paddingHorizontal: GRID_PADDING,
     paddingBottom: 32,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    width: '100%',
   },
   stickerCard: {
     backgroundColor: neutralColors.gray100,
     borderRadius: 4,
     overflow: 'hidden',
     position: 'relative',
-    marginBottom: 0,
   },
   stickerCardSelected: {
     opacity: 0.7,
