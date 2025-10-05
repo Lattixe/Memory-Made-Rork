@@ -473,10 +473,10 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
           canvas.width = img.width;
           canvas.height = img.height;
           
-          // Draw original image
+          // Draw the sticker image (already has transparent background)
           ctx.drawImage(img, 0, 0);
           
-          // Get image data to create stroke from alpha channel
+          // Get image data to create stroke from the sticker's alpha channel
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const data = imageData.data;
           
@@ -546,12 +546,12 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
             }
           }
           
-          // Draw stroke first
-          strokeCtx.putImageData(strokeData, 0, 0);
+          // Clear canvas and draw stroke first (underneath)
           ctx.clearRect(0, 0, canvas.width, canvas.height);
+          strokeCtx.putImageData(strokeData, 0, 0);
           ctx.drawImage(strokeCanvas, 0, 0);
           
-          // Draw original image on top
+          // Draw the sticker on top of the stroke
           ctx.drawImage(img, 0, 0);
           
           canvas.toBlob(
