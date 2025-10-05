@@ -23,6 +23,7 @@ import { useUser } from '@/contexts/UserContext';
 import { safeJsonParse } from '@/utils/json';
 import { compressBase64Image, estimateBase64Size } from '@/utils/imageCompression';
 import { processStickerImage } from '@/utils/backgroundRemover';
+import { getEditPrompt } from '@/utils/promptManager';
 
 type ImageEditRequest = {
   prompt: string;
@@ -301,8 +302,10 @@ const EditScreen = () => {
     const maxRetries = 0;
     const timeout = 4000;
     
+    const prompt = await getEditPrompt(promptToUse);
+    
     const requestBody: ImageEditRequest = {
-      prompt: promptToUse + " Keep the sticker style clean and suitable for die-cut printing.",
+      prompt,
       images: [{ type: 'image', image: base64Data }],
     };
 

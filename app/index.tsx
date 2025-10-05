@@ -24,6 +24,7 @@ import LoginForm from '@/components/LoginForm';
 import StickerGallery from '@/components/StickerGallery';
 import { safeJsonParse } from '@/utils/json';
 import { processStickerImage } from '@/utils/backgroundRemover';
+import { getInitialGenerationPrompt, getRegenerationPrompt } from '@/utils/promptManager';
 
 
 type ImageEditRequest = {
@@ -204,8 +205,10 @@ export default function UploadScreen() {
     const baseTimeout = 90000; // 90 seconds base timeout
     const timeout = baseTimeout + (retryCount * 30000); // Add 30s per retry
     
+    const prompt = await getInitialGenerationPrompt();
+    
     const requestBody: ImageEditRequest = {
-      prompt: 'Carefully analyze this photo and identify ALL prominent objects, people, animals, and distinctive elements. For each subject, create an accurate kiss-cut sticker design that closely matches the original appearance while optimizing for Printful printing. CRITICAL REQUIREMENTS: 1) COMPLETELY TRANSPARENT BACKGROUND - remove all background elements and make the background fully transparent (PNG format with alpha channel), 2) PRESERVE the exact colors, patterns, textures, and distinctive features of each subject from the original photo, 3) Maintain accurate proportions, poses, and spatial relationships between elements, 4) Keep recognizable details like facial features, clothing patterns, logos, text, or unique markings, 5) Use the actual color palette from the photo - do not change or stylize colors unless necessary for print quality, 6) Create clean vector-style edges with smooth curves around the subject, 7) CENTER the main subject PERFECTLY in the image frame with equal padding on all sides - the subject should be in the exact center both horizontally and vertically, 8) Add minimum 0.125 inch (3mm) bleed area around each design, 9) Avoid fine details smaller than 0.1 inch but preserve character-defining features, 10) Use bold, clear outlines while maintaining subject accuracy, 11) Ensure designs work at 3x3 inch minimum size, 12) Make the subject fill approximately 85-90% of the frame for optimal viewing and consistent sizing. The goal is photographic accuracy transformed into perfectly centered, transparent sticker format with the subject filling most of the frame.',
+      prompt,
       images: [{ type: 'image', image: base64Data }],
     };
 
@@ -377,8 +380,10 @@ export default function UploadScreen() {
         base64Data = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
       }
 
+      const prompt = await getRegenerationPrompt(promptText);
+      
       const requestBody: ImageEditRequest = {
-        prompt: `Create a completely new high-quality kiss-cut sticker design based on this description: "${promptText.trim()}". IGNORE the white background image provided - this is just a placeholder. Create an entirely new design from scratch. REQUIREMENTS: 1) COMPLETELY TRANSPARENT BACKGROUND - no background elements, fully transparent PNG with alpha channel, 2) Design should be optimized for Printful kiss-cut sticker printing, 3) Use vibrant, bold colors that will print well, 4) Create clean vector-style artwork with smooth edges, 5) CENTER the main subject PERFECTLY in the image frame with equal padding on all sides - the subject should be in the exact center both horizontally and vertically, 6) Add minimum 0.125 inch (3mm) bleed area around the design, 7) Avoid fine details smaller than 0.1 inch, 8) Use bold, clear outlines, 9) Ensure design works at 3x3 inch minimum size, 10) Make it visually appealing and memorable as a sticker, 11) Focus on the main subject with no background elements, 12) Make the subject fill approximately 85-90% of the frame for optimal viewing and consistent sizing. Generate a completely original design based on the text description with transparent background, perfectly centered and filling most of the frame.`,
+        prompt,
         images: [{ type: 'image', image: base64Data }],
       };
 
