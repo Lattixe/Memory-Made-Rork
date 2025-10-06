@@ -454,7 +454,7 @@ function floodFill(alphaMap: Uint8Array, w: number, h: number, startX: number, s
     
     if (x < 0 || x >= w || y < 0 || y >= h) continue;
     if (visited[idx] === 1) continue;
-    if (alphaMap[idx] < 50) continue;
+    if (alphaMap[idx] < 10) continue;
     
     visited[idx] = 1;
     count++;
@@ -475,7 +475,7 @@ function keepLargestComponent(alphaMap: Uint8Array, w: number, h: number): Uint8
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const idx = y * w + x;
-      if (alphaMap[idx] >= 50 && visited[idx] === 0) {
+      if (alphaMap[idx] >= 10 && visited[idx] === 0) {
         const size = floodFill(alphaMap, w, h, x, y, visited);
         components.push({ startX: x, startY: y, size });
       }
@@ -537,11 +537,11 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
           const w = canvas.width;
           const h = canvas.height;
           
-          console.log('Step 1: Extract alpha and apply hard threshold...');
+          console.log('Step 1: Extract alpha with soft threshold...');
           const alphaMap = new Uint8Array(w * h);
           for (let i = 0; i < data.length; i += 4) {
             const alpha = data[i + 3];
-            alphaMap[i / 4] = alpha >= 50 ? alpha : 0;
+            alphaMap[i / 4] = alpha >= 10 ? alpha : 0;
           }
           
           console.log('Step 2: Keep only largest connected component...');
@@ -588,7 +588,7 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
               for (let x = 0; x < w; x++) {
                 const idx = y * w + x;
                 
-                if (cleanedAlpha[idx] > 200) {
+                if (cleanedAlpha[idx] > 128) {
                   continue;
                 }
                 
@@ -623,7 +623,7 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
             for (let x = 0; x < w; x++) {
               const idx = y * w + x;
               
-              if (cleanedAlpha[idx] > 200) {
+              if (cleanedAlpha[idx] > 128) {
                 finalAlpha[idx] = cleanedAlpha[idx];
               } else if (blurredStroke[idx] > 0) {
                 let sum = 0;
@@ -661,12 +661,12 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
             
             const idx = i * 4;
             
-            if (originalAlpha > 200) {
+            if (originalAlpha > 10) {
               strokePixels[idx] = data[idx];
               strokePixels[idx + 1] = data[idx + 1];
               strokePixels[idx + 2] = data[idx + 2];
               strokePixels[idx + 3] = originalAlpha;
-            } else if (strokeAlpha > 20) {
+            } else if (strokeAlpha > 10 && originalAlpha === 0) {
               strokePixels[idx] = r;
               strokePixels[idx + 1] = g;
               strokePixels[idx + 2] = b;
