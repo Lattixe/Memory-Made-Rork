@@ -309,17 +309,9 @@ const EditScreen = () => {
       
       console.log('Edit completed successfully!');
       
-      console.log('Processing sticker with background removal...');
+      console.log('Skipping aggressive background removal to preserve quality...');
       
-      const cleanupPromise = processStickerImage(data.image.base64Data, false, false);
-      const timeoutPromise = new Promise<string>((resolve) => 
-        setTimeout(() => {
-          console.log('Processing timeout, using unprocessed image');
-          resolve(data.image.base64Data);
-        }, 3000)
-      );
-      
-      const cleanedBase64 = await Promise.race([cleanupPromise, timeoutPromise]);
+      const cleanedBase64 = data.image.base64Data;
       
       return {
         image: {
