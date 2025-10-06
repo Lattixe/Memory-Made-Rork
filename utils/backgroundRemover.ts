@@ -547,63 +547,39 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
           console.log('Step 2: Keep only largest connected component...');
           const cleanedAlpha = keepLargestComponent(alphaMap, w, h);
           
-          console.log('Step 3: Dilate to create expanded boundary...');
+          console.log('Step 3: Dilate to create stroke outline...');
           const dilatedAlpha = new Uint8Array(w * h);
           dilatedAlpha.set(cleanedAlpha);
           
-          const dilateAmount = strokeWidth + 2;
-          
-          for (let iter = 0; iter < dilateAmount; iter++) {
+          for (let iter = 0; iter < strokeWidth; iter++) {
             const source = new Uint8Array(dilatedAlpha);
             
             for (let y = 0; y < h; y++) {
               for (let x = 0; x < w; x++) {
                 const idx = y * w + x;
-                
-                if (source[idx] > 0) {
-                  dilatedAlpha[idx] = 255;
-                  continue;
-                }
-                
-                let hasNeighbor = false;
+                let maxAlpha = source[idx];
                 
                 for (let dy = -1; dy <= 1; dy++) {
                   for (let dx = -1; dx <= 1; dx++) {
-                    if (dx === 0 && dy === 0) continue;
-                    
                     const nx = x + dx;
                     const ny = y + dy;
                     
                     if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
                       const nIdx = ny * w + nx;
-                      if (source[nIdx] > 0) {
-                        hasNeighbor = true;
-                        break;
-                      }
+                      maxAlpha = Math.max(maxAlpha, source[nIdx]);
                     }
                   }
-                  if (hasNeighbor) break;
                 }
                 
-                if (hasNeighbor) {
-                  dilatedAlpha[idx] = 255;
-                }
+                dilatedAlpha[idx] = maxAlpha;
               }
             }
           }
           
-          console.log('Step 3.5: Create stroke-only mask (expanded - original)...');
-          const strokeOnlyMask = new Uint8Array(w * h);
-          for (let i = 0; i < w * h; i++) {
-            if (dilatedAlpha[i] > 0 && cleanedAlpha[i] < 50) {
-              strokeOnlyMask[i] = 255;
-            }
-          }
-          
-          console.log('Step 4: Apply multi-pass Gaussian blur to stroke mask only...');
-          let blurredStroke = new Uint8Array(strokeOnlyMask);
-          const blurRadius = 2;
-          const blurPasses = 4;
+          console.log('Step 4: Apply multi-pass Gaussian blur for ultra-smooth edges...');
+          let blurredStroke = new Uint8Array(dilatedAlpha);
+          const blurRadius = 3;
+          const blurPasses = 3;
           
           for (let pass = 0; pass < blurPasses; pass++) {
             const source = new Uint8Array(blurredStroke);
@@ -612,7 +588,7 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
               for (let x = 0; x < w; x++) {
                 const idx = y * w + x;
                 
-                if (strokeOnlyMask[idx] === 0) {
+                if (cleanedAlpha[idx] > 200) {
                   continue;
                 }
                 
@@ -627,7 +603,7 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
                     if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
                       const nIdx = ny * w + nx;
                       const distance = Math.sqrt(dx * dx + dy * dy);
-                      const weight = Math.exp(-(distance * distance) / (2 * blurRadius * blurRadius));
+                      const weight = Math.exp(-(distance * distance) / (2 * (blurRadius / 1.5) * (blurRadius / 1.5)));
                       sum += source[nIdx] * weight;
                       weightSum += weight;
                     }
@@ -639,18 +615,39 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
             }
           }
           
-          console.log('Step 5: Combine original content with smooth stroke...');
+          console.log('Step 5: Apply final anti-aliasing pass...');
           const finalAlpha = new Uint8Array(w * h);
+          const aaRadius = 1;
           
-          for (let i = 0; i < w * h; i++) {
-            if (cleanedAlpha[i] > 50) {
-              finalAlpha[i] = cleanedAlpha[i];
-            } else if (blurredStroke[i] > 20) {
-              finalAlpha[i] = blurredStroke[i];
+          for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+              const idx = y * w + x;
+              
+              if (cleanedAlpha[idx] > 200) {
+                finalAlpha[idx] = cleanedAlpha[idx];
+              } else if (blurredStroke[idx] > 0) {
+                let sum = 0;
+                let count = 0;
+                
+                for (let dy = -aaRadius; dy <= aaRadius; dy++) {
+                  for (let dx = -aaRadius; dx <= aaRadius; dx++) {
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    
+                    if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                      const nIdx = ny * w + nx;
+                      sum += blurredStroke[nIdx];
+                      count++;
+                    }
+                  }
+                }
+                
+                finalAlpha[idx] = Math.round(sum / count);
+              }
             }
           }
           
-          console.log('Step 6: Composite final image - original content over stroke...');
+          console.log('Step 6: Composite final image with smooth edges...');
           const r = parseInt(strokeColor.slice(1, 3), 16);
           const g = parseInt(strokeColor.slice(3, 5), 16);
           const b = parseInt(strokeColor.slice(5, 7), 16);
@@ -660,11 +657,11 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
           
           for (let i = 0; i < w * h; i++) {
             const originalAlpha = cleanedAlpha[i];
-            const strokeAlpha = blurredStroke[i];
+            const strokeAlpha = finalAlpha[i];
             
             const idx = i * 4;
             
-            if (originalAlpha > 50) {
+            if (originalAlpha > 200) {
               strokePixels[idx] = data[idx];
               strokePixels[idx + 1] = data[idx + 1];
               strokePixels[idx + 2] = data[idx + 2];
