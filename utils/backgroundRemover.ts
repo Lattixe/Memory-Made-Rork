@@ -576,17 +576,22 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
             }
           }
           
-          console.log('Step 4: Apply strong Gaussian blur for smooth edges...');
-          const blurredStroke = new Uint8Array(w * h);
-          const blurRadius = 2;
+          console.log('Step 4: Apply multi-pass Gaussian blur for ultra-smooth edges...');
+          let blurredStroke = new Uint8Array(dilatedAlpha);
+          const blurRadius = 3;
+          const blurPasses = 3;
           
-          for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-              const idx = y * w + x;
-              
-              if (cleanedAlpha[idx] > 128) {
-                blurredStroke[idx] = dilatedAlpha[idx];
-              } else if (dilatedAlpha[idx] > 0) {
+          for (let pass = 0; pass < blurPasses; pass++) {
+            const source = new Uint8Array(blurredStroke);
+            
+            for (let y = 0; y < h; y++) {
+              for (let x = 0; x < w; x++) {
+                const idx = y * w + x;
+                
+                if (cleanedAlpha[idx] > 200) {
+                  continue;
+                }
+                
                 let sum = 0;
                 let weightSum = 0;
                 
@@ -598,8 +603,8 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
                     if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
                       const nIdx = ny * w + nx;
                       const distance = Math.sqrt(dx * dx + dy * dy);
-                      const weight = Math.exp(-(distance * distance) / (2 * blurRadius * blurRadius));
-                      sum += dilatedAlpha[nIdx] * weight;
+                      const weight = Math.exp(-(distance * distance) / (2 * (blurRadius / 1.5) * (blurRadius / 1.5)));
+                      sum += source[nIdx] * weight;
                       weightSum += weight;
                     }
                   }
@@ -610,7 +615,39 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
             }
           }
           
-          console.log('Step 5: Composite final image...');
+          console.log('Step 5: Apply final anti-aliasing pass...');
+          const finalAlpha = new Uint8Array(w * h);
+          const aaRadius = 1;
+          
+          for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+              const idx = y * w + x;
+              
+              if (cleanedAlpha[idx] > 200) {
+                finalAlpha[idx] = cleanedAlpha[idx];
+              } else if (blurredStroke[idx] > 0) {
+                let sum = 0;
+                let count = 0;
+                
+                for (let dy = -aaRadius; dy <= aaRadius; dy++) {
+                  for (let dx = -aaRadius; dx <= aaRadius; dx++) {
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    
+                    if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                      const nIdx = ny * w + nx;
+                      sum += blurredStroke[nIdx];
+                      count++;
+                    }
+                  }
+                }
+                
+                finalAlpha[idx] = Math.round(sum / count);
+              }
+            }
+          }
+          
+          console.log('Step 6: Composite final image with smooth edges...');
           const r = parseInt(strokeColor.slice(1, 3), 16);
           const g = parseInt(strokeColor.slice(3, 5), 16);
           const b = parseInt(strokeColor.slice(5, 7), 16);
@@ -620,16 +657,16 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
           
           for (let i = 0; i < w * h; i++) {
             const originalAlpha = cleanedAlpha[i];
-            const strokeAlpha = blurredStroke[i];
+            const strokeAlpha = finalAlpha[i];
             
             const idx = i * 4;
             
-            if (originalAlpha > 128) {
+            if (originalAlpha > 200) {
               strokePixels[idx] = data[idx];
               strokePixels[idx + 1] = data[idx + 1];
               strokePixels[idx + 2] = data[idx + 2];
               strokePixels[idx + 3] = originalAlpha;
-            } else if (strokeAlpha > 30) {
+            } else if (strokeAlpha > 20) {
               strokePixels[idx] = r;
               strokePixels[idx + 1] = g;
               strokePixels[idx + 2] = b;
