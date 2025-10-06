@@ -544,10 +544,10 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
             alphaMap[i / 4] = alpha >= 10 ? alpha : 0;
           }
           
-          console.log('Step 2: Keep only largest connected component...');
-          const cleanedAlpha = keepLargestComponent(alphaMap, w, h);
+          console.log('Step 2: Preserve all visible pixels (skip component filtering)...');
+          const cleanedAlpha = alphaMap;
           
-          console.log('Step 3: Dilate to create stroke outline...');
+          console.log('Step 3: Dilate to create stroke outline (preserve all content)...');
           const dilatedAlpha = new Uint8Array(w * h);
           dilatedAlpha.set(cleanedAlpha);
           
@@ -557,6 +557,12 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
             for (let y = 0; y < h; y++) {
               for (let x = 0; x < w; x++) {
                 const idx = y * w + x;
+                
+                if (cleanedAlpha[idx] > 10) {
+                  dilatedAlpha[idx] = cleanedAlpha[idx];
+                  continue;
+                }
+                
                 let maxAlpha = source[idx];
                 
                 for (let dy = -1; dy <= 1; dy++) {
@@ -566,7 +572,9 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
                     
                     if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
                       const nIdx = ny * w + nx;
-                      maxAlpha = Math.max(maxAlpha, source[nIdx]);
+                      if (cleanedAlpha[nIdx] > 10) {
+                        maxAlpha = Math.max(maxAlpha, source[nIdx]);
+                      }
                     }
                   }
                 }
