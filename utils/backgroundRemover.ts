@@ -537,10 +537,12 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
           const w = canvas.width;
           const h = canvas.height;
           
-          console.log('Step 1: Extract alpha and clean up isolated pixels...');
+          console.log('Step 1: Extract alpha and preserve original...');
+          const originalAlpha = new Uint8Array(w * h);
           const alphaMap = new Uint8Array(w * h);
           for (let i = 0; i < data.length; i += 4) {
             const alpha = data[i + 3];
+            originalAlpha[i / 4] = alpha;
             alphaMap[i / 4] = alpha >= 20 ? alpha : 0;
           }
           
@@ -702,7 +704,7 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
             }
           }
           
-          console.log('Step 6: Composite final image with smooth edges...');
+          console.log('Step 8: Composite final image with smooth edges...');
           const r = parseInt(strokeColor.slice(1, 3), 16);
           const g = parseInt(strokeColor.slice(3, 5), 16);
           const b = parseInt(strokeColor.slice(5, 7), 16);
@@ -711,17 +713,17 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
           const strokePixels = strokeData.data;
           
           for (let i = 0; i < w * h; i++) {
-            const originalAlpha = cleanedAlpha[i];
+            const origAlpha = originalAlpha[i];
             const strokeAlpha = finalAlpha[i];
             
             const idx = i * 4;
             
-            if (originalAlpha > 10) {
+            if (origAlpha > 10) {
               strokePixels[idx] = data[idx];
               strokePixels[idx + 1] = data[idx + 1];
               strokePixels[idx + 2] = data[idx + 2];
-              strokePixels[idx + 3] = originalAlpha;
-            } else if (strokeAlpha > 10 && originalAlpha === 0) {
+              strokePixels[idx + 3] = origAlpha;
+            } else if (strokeAlpha > 10) {
               strokePixels[idx] = r;
               strokePixels[idx + 1] = g;
               strokePixels[idx + 2] = b;
