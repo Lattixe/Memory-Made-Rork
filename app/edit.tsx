@@ -309,9 +309,8 @@ const EditScreen = () => {
       
       console.log('Edit completed successfully!');
       
-      console.log('Skipping aggressive background removal to preserve quality...');
-      
-      const cleanedBase64 = data.image.base64Data;
+      console.log('Applying enhanced background removal, stroke, and auto-cropping...');
+      const cleanedBase64 = await processStickerImage(data.image.base64Data, false, true, true);
       
       return {
         image: {
