@@ -16,11 +16,6 @@ const getBaseUrl = () => {
     return envUrl.replace(/\/$/, '');
   }
 
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    console.log('[trpc] Using window.location.origin:', window.location.origin);
-    return window.location.origin.replace(/\/$/, '');
-  }
-
   console.warn('[trpc] No env base URL found, falling back to default Rork tunnel URL');
   return DEFAULT_RORK_BASE_URL;
 };
@@ -100,7 +95,7 @@ export const trpcClient = createTRPCClient<AppRouter>({
 export const trpcReactClient = trpc.createClient({
   links: [
     httpLink({
-      url: `${getBaseUrl()}/api/trpc`,
+      url: `${getBaseUrl().replace(/\/$/, '')}/api/trpc`,
       transformer: superjson,
       headers() {
         const token = getAuthToken();

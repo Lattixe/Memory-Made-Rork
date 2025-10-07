@@ -14,14 +14,13 @@ export default function BackendDiagnostics() {
   const [results, setResults] = useState<DiagnosticResult[]>([]);
   const [isRunning, setIsRunning] = useState(false);
 
+  const DEFAULT_RORK_BASE_URL = 'https://dev-m7gyp7dzka89rw149zpa5.rorktest.dev' as const;
+
   const getBaseUrl = () => {
     if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
-      return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+      return (process.env.EXPO_PUBLIC_RORK_API_BASE_URL as string).replace(/\/$/, '');
     }
-    if (typeof window !== 'undefined' && window.location?.origin) {
-      return window.location.origin;
-    }
-    return '';
+    return DEFAULT_RORK_BASE_URL;
   };
 
   const runDiagnostics = React.useCallback(async () => {
