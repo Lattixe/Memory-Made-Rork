@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { neutralColors } from '@/constants/colors';
+import { trpcClient } from '@/lib/trpc';
 
 type DiagnosticResult = {
   endpoint: string;
@@ -92,6 +93,25 @@ export default function BackendDiagnostics() {
       }
     }
 
+    try {
+      console.log('Testing tRPC connection...');
+      const trpcResult = await trpcClient.example.hi.mutate({ name: 'test' });
+      diagnostics.push({
+        endpoint: 'tRPC Connection',
+        status: 'success',
+        message: '✅ tRPC is working',
+        data: trpcResult,
+      });
+      console.log('✅ tRPC connection passed:', trpcResult);
+    } catch (error: any) {
+      diagnostics.push({
+        endpoint: 'tRPC Connection',
+        status: 'error',
+        message: `❌ ${error.message}`,
+      });
+      console.error('❌ tRPC connection error:', error);
+    }
+
     setResults(diagnostics);
     setIsRunning(false);
     console.log('🔍 Diagnostics complete');
@@ -102,8 +122,11 @@ export default function BackendDiagnostics() {
   }, [runDiagnostics]);
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       <Text style={styles.title}>Backend Diagnostics</Text>
+      <Text style={styles.subtitle}>
+        Check backend connectivity and API configuration
+      </Text>
       
       {isRunning && (
         <View style={styles.loadingContainer}>
@@ -127,7 +150,9 @@ export default function BackendDiagnostics() {
           </View>
           <Text style={styles.message}>{result.message}</Text>
           {result.data && (
-            <Text style={styles.data}>{JSON.stringify(result.data, null, 2)}</Text>
+            <ScrollView horizontal style={styles.dataScroll}>
+              <Text style={styles.data}>{JSON.stringify(result.data, null, 2)}</Text>
+            </ScrollView>
           )}
         </View>
       ))}
@@ -141,7 +166,17 @@ export default function BackendDiagnostics() {
           {isRunning ? 'Running...' : 'Run Diagnostics Again'}
         </Text>
       </TouchableOpacity>
-    </View>
+
+      <View style={styles.infoBox}>
+        <Text style={styles.infoTitle}>⚠️ Setup Required</Text>
+        <Text style={styles.infoText}>
+          If OpenAI Config shows &quot;missing&quot;, you need to set the OPENAI_API_KEY environment variable in your Rork project settings (server-side).
+        </Text>
+        <Text style={styles.infoText}>
+          After setting it, restart the development server and run diagnostics again.
+        </Text>
+      </View>
+    </ScrollView>
   );
 }
 
@@ -153,8 +188,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700' as const,
-    marginBottom: 20,
+    marginBottom: 8,
     color: neutralColors.text.primary,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: neutralColors.text.secondary,
+    marginBottom: 20,
   },
   loadingContainer: {
     alignItems: 'center',
@@ -202,11 +242,13 @@ const styles = StyleSheet.create({
     color: neutralColors.text.secondary,
     marginBottom: 4,
   },
+  dataScroll: {
+    marginTop: 8,
+  },
   data: {
     fontSize: 12,
     color: '#666',
     fontFamily: 'monospace',
-    marginTop: 8,
   },
   button: {
     backgroundColor: neutralColors.primary,
@@ -219,5 +261,25 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600' as const,
+  },
+  infoBox: {
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: '#fff3cd',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ffc107',
+  },
+  infoTitle: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: '#856404',
+    marginBottom: 8,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#856404',
+    marginBottom: 8,
+    lineHeight: 20,
   },
 });
