@@ -158,9 +158,14 @@ app.get("/test-openai", (c) => {
   });
 });
 
-// Simple health check endpoint
+// Simple health check endpoint (handle both / and empty path)
 app.get("/", (c) => {
-  console.log('[backend] Health check endpoint hit');
+  console.log('[backend] Health check endpoint hit at /');
+  return c.json({ status: "ok", message: "API is running" });
+});
+
+app.get("", (c) => {
+  console.log('[backend] Health check endpoint hit at empty path');
   return c.json({ status: "ok", message: "API is running" });
 });
 
