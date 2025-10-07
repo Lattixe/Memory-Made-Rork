@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { memoryMadeColors } from '@/constants/colors';
+import { neutralColors } from '@/constants/colors';
 
 type DiagnosticResult = {
   endpoint: string;
@@ -107,7 +107,7 @@ export default function BackendDiagnostics() {
       
       {isRunning && (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={memoryMadeColors.primary} />
+          <ActivityIndicator size="large" color={neutralColors.primary} />
           <Text style={styles.loadingText}>Running diagnostics...</Text>
         </View>
       )}
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700' as const,
     marginBottom: 20,
-    color: memoryMadeColors.text.primary,
+    color: neutralColors.text.primary,
   },
   loadingContainer: {
     alignItems: 'center',
@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: memoryMadeColors.text.secondary,
+    color: neutralColors.text.secondary,
   },
   resultContainer: {
     marginBottom: 16,
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   endpoint: {
     fontSize: 16,
     fontWeight: '600' as const,
-    color: memoryMadeColors.text.primary,
+    color: neutralColors.text.primary,
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
   },
   message: {
     fontSize: 14,
-    color: memoryMadeColors.text.secondary,
+    color: neutralColors.text.secondary,
     marginBottom: 4,
   },
   data: {
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   button: {
-    backgroundColor: memoryMadeColors.primary,
+    backgroundColor: neutralColors.primary,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
