@@ -291,15 +291,18 @@ export default function UploadScreen() {
       let errorMessage = 'Failed to generate custom sticker. Please try again.';
       let errorTitle = 'Generation Error';
       
-      if (error.name === 'AbortError' || error.message.includes('timeout') || error.message.includes('timed out')) {
+      if (error.message.includes('Cannot connect to backend') || error.message.includes('development server')) {
+        errorTitle = 'Backend Not Running';
+        errorMessage = 'The backend server is not running. Please make sure you started the app with "bun start" and try again.';
+      } else if (error.name === 'AbortError' || error.message.includes('timeout') || error.message.includes('timed out')) {
         errorTitle = 'Request Timeout';
         errorMessage = 'Generation is taking longer than expected. The server may be busy. Please try again in a few moments.';
       } else if (error.message.includes('504') || error.message.includes('502') || error.message.includes('503') || error.message.includes('500')) {
         errorTitle = 'Server Busy';
         errorMessage = 'The AI service is temporarily overloaded. Please wait 30-60 seconds and try again.';
-      } else if (error.message.includes('network') || error.message.includes('fetch')) {
+      } else if (error.message.includes('network') || error.message.includes('fetch') || error.message.includes('Failed to fetch')) {
         errorTitle = 'Connection Issue';
-        errorMessage = 'Network connection problem. Please check your internet connection and try again.';
+        errorMessage = 'Cannot connect to the backend server. Please ensure the development server is running with "bun start".';
       } else if (error.message.includes('Server returned') || error.message.includes('invalid data')) {
         errorTitle = 'Server Error';
         errorMessage = 'The server returned an unexpected response. Please try again or contact support if the issue persists.';

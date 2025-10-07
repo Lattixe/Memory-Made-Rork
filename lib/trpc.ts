@@ -80,11 +80,12 @@ export const trpcClient = createTRPCClient<AppRouter>({
             if (error.message === 'Failed to fetch') {
               console.error('[trpc] 🔴 NETWORK ERROR: Cannot connect to backend');
               console.error('[trpc] Check if:');
-              console.error('[trpc] 1. Backend server is running');
+              console.error('[trpc] 1. Backend server is running (run: bun start)');
               console.error('[trpc] 2. EXPO_PUBLIC_RORK_API_BASE_URL is correct:', process.env.EXPO_PUBLIC_RORK_API_BASE_URL);
               console.error('[trpc] 3. CORS is properly configured');
               console.error('[trpc] 4. Network connection is stable');
-              throw new Error('Cannot connect to backend server. Please check your connection and try again.');
+              console.error('[trpc] 5. Try restarting the development server');
+              throw new Error('Cannot connect to backend server. Make sure the development server is running with "bun start".');
             }
             
             throw error;
@@ -124,7 +125,7 @@ export const trpcReactClient = trpc.createClient({
               throw new Error(`Request timeout after ${timeoutMs}ms`);
             }
             if (error.message === 'Failed to fetch') {
-              throw new Error('Cannot connect to backend server. Please check your connection and try again.');
+              throw new Error('Cannot connect to backend server. Make sure the development server is running with "bun start".');
             }
             throw error;
           });
