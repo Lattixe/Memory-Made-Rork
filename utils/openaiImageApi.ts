@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { safeJsonParse } from '@/utils/json';
 
 type OpenAIImageGenerateRequest = {
@@ -33,6 +34,25 @@ export type ImageEditResponse = {
   image: { base64Data: string; mimeType: string };
 };
 
+function resolveOpenAIKey(): string | undefined {
+  const fromEnv = (process as any)?.env?.EXPO_PUBLIC_OPENAI_API_KEY as string | undefined;
+  const extra = (Constants?.expoConfig as any)?.extra ?? {};
+  const fromExtraDirect = extra?.EXPO_PUBLIC_OPENAI_API_KEY ?? extra?.OPENAI_API_KEY;
+  const fromExtraNested = extra?.openai?.apiKey ?? extra?.public?.EXPO_PUBLIC_OPENAI_API_KEY;
+  const fromWindow = Platform.OS === 'web' ? (globalThis as any)?.ENV?.EXPO_PUBLIC_OPENAI_API_KEY ?? (globalThis as any)?.EXPO_PUBLIC_OPENAI_API_KEY : undefined;
+  return fromEnv ?? fromExtraDirect ?? fromExtraNested ?? fromWindow;
+}
+
+function assertApiKeyOrThrow(): string {
+  const key = resolveOpenAIKey();
+  if (!key) {
+    throw new Error(
+      'OpenAI API key not configured. Set EXPO_PUBLIC_OPENAI_API_KEY in your environment (.env), or add it to app.json under expo.extra.public.EXPO_PUBLIC_OPENAI_API_KEY, or provide extra.openai.apiKey.'
+    );
+  }
+  return key;
+}
+
 export async function callOpenAIImageGenerate(
   prompt: string,
   options: {
@@ -65,7 +85,7 @@ export async function callOpenAIImageGenerate(
       background,
     };
 
-    const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
+    const apiKey = assertApiKeyOrThrow();
     if (!apiKey) {
       throw new Error('OpenAI API key not configured');
     }
@@ -186,7 +206,7 @@ export async function callOpenAIImageEdit(
       background,
     };
 
-    const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
+    const apiKey = assertApiKeyOrThrow();
     if (!apiKey) {
       throw new Error('OpenAI API key not configured');
     }
