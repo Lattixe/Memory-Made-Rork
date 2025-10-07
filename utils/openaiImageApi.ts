@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { safeJsonParse } from '@/utils/json';
 
 type OpenAIImageGenerateRequest = {
@@ -69,13 +70,20 @@ export async function callOpenAIImageGenerate(
       throw new Error('OpenAI API key not configured');
     }
 
+    const form = new FormData();
+    form.append('model', requestBody.model);
+    form.append('prompt', requestBody.prompt);
+    form.append('n', String(requestBody.n ?? 1));
+    form.append('size', requestBody.size ?? '1024x1024');
+    if (requestBody.background) form.append('background', requestBody.background);
+    form.append('response_format', 'b64_json');
+
     const response = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(requestBody),
+      body: form,
       signal: controller.signal,
     });
 
@@ -184,13 +192,33 @@ export async function callOpenAIImageEdit(
       throw new Error('OpenAI API key not configured');
     }
 
+    const form = new FormData();
+    form.append('model', requestBody.model);
+    form.append('prompt', requestBody.prompt);
+    form.append('n', String(requestBody.n ?? 1));
+    form.append('size', requestBody.size ?? '1024x1024');
+    if (requestBody.background) form.append('background', requestBody.background);
+    form.append('response_format', 'b64_json');
+
+    const dataUri = `data:image/png;base64,${base64Data}`;
+    if (Platform.OS === 'web') {
+      const blob = await (await fetch(dataUri)).blob();
+      const file = new File([blob], 'image.png', { type: 'image/png' });
+      form.append('image', file);
+    } else {
+      form.append('image', {
+        uri: dataUri,
+        name: 'image.png',
+        type: 'image/png',
+      } as any);
+    }
+
     const response = await fetch('https://api.openai.com/v1/images/edits', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(requestBody),
+      body: form,
       signal: controller.signal,
     });
 
