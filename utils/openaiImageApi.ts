@@ -7,6 +7,8 @@ type OpenAIImageGenerateRequest = {
   size?: '1024x1024' | '1024x1792' | '1792x1024';
   output_format?: 'png' | 'webp';
   background?: 'transparent' | 'opaque' | 'auto';
+  content_moderation?: 'low' | 'medium' | 'high';
+  quality?: 'low' | 'medium' | 'high';
 };
 
 type OpenAIImageGenerateResponse = {
@@ -26,6 +28,8 @@ type OpenAIImageEditRequest = {
   size?: '1024x1024' | '1024x1792' | '1792x1024';
   output_format?: 'png' | 'webp';
   background?: 'transparent' | 'opaque' | 'auto';
+  content_moderation?: 'low' | 'medium' | 'high';
+  quality?: 'low' | 'medium' | 'high';
 };
 
 export type ImageEditResponse = {
@@ -38,6 +42,8 @@ export async function callOpenAIImageGenerate(
     model?: 'gpt-image-1-mini' | 'gpt-image-1';
     size?: '1024x1024' | '1024x1792' | '1792x1024';
     background?: 'transparent' | 'opaque' | 'auto';
+    content_moderation?: 'low' | 'medium' | 'high';
+    quality?: 'low' | 'medium' | 'high';
     timeout?: number;
   } = {}
 ): Promise<ImageEditResponse> {
@@ -45,6 +51,8 @@ export async function callOpenAIImageGenerate(
     model = 'gpt-image-1-mini',
     size = '1024x1024',
     background = 'transparent',
+    content_moderation = 'low',
+    quality = 'medium',
     timeout = 60000,
   } = options;
 
@@ -53,7 +61,7 @@ export async function callOpenAIImageGenerate(
 
   try {
     console.log(`Calling OpenAI ${model} API for image generation...`);
-    console.log(`Settings: size=${size}, background=${background}, output_format=png`);
+    console.log(`Settings: size=${size}, background=${background}, output_format=png, content_moderation=${content_moderation}, quality=${quality}`);
 
     const requestBody: OpenAIImageGenerateRequest = {
       model,
@@ -62,6 +70,8 @@ export async function callOpenAIImageGenerate(
       size,
       output_format: 'png',
       background,
+      content_moderation,
+      quality,
     };
 
     const apiKey = process.env.OPENAI_API_KEY;
@@ -152,6 +162,8 @@ export async function callOpenAIImageEdit(
     model?: 'gpt-image-1-mini' | 'gpt-image-1';
     size?: '1024x1024' | '1024x1792' | '1792x1024';
     background?: 'transparent' | 'opaque' | 'auto';
+    content_moderation?: 'low' | 'medium' | 'high';
+    quality?: 'low' | 'medium' | 'high';
     timeout?: number;
   } = {}
 ): Promise<ImageEditResponse> {
@@ -159,6 +171,8 @@ export async function callOpenAIImageEdit(
     model = 'gpt-image-1-mini',
     size = '1024x1024',
     background = 'transparent',
+    content_moderation = 'low',
+    quality = 'medium',
     timeout = 60000,
   } = options;
 
@@ -167,7 +181,7 @@ export async function callOpenAIImageEdit(
 
   try {
     console.log(`Calling OpenAI ${model} API for image editing...`);
-    console.log(`Settings: size=${size}, background=${background}, output_format=png`);
+    console.log(`Settings: size=${size}, background=${background}, output_format=png, content_moderation=${content_moderation}, quality=${quality}`);
 
     const requestBody: OpenAIImageEditRequest = {
       model,
@@ -177,6 +191,8 @@ export async function callOpenAIImageEdit(
       size,
       output_format: 'png',
       background,
+      content_moderation,
+      quality,
     };
 
     const apiKey = process.env.OPENAI_API_KEY;
