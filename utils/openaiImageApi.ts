@@ -64,7 +64,7 @@ export async function callOpenAIImageGenerate(
       background,
     };
 
-    const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       throw new Error('OpenAI API key not configured');
     }
@@ -179,7 +179,7 @@ export async function callOpenAIImageEdit(
       background,
     };
 
-    const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       throw new Error('OpenAI API key not configured');
     }
