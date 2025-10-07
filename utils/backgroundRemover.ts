@@ -537,93 +537,97 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
           const w = canvas.width;
           const h = canvas.height;
           
-          console.log('Step 1: Extract alpha and preserve original...');
+          console.log('Step 1: Preserve original pixels completely...');
+          const originalRGBA = new Uint8ClampedArray(data);
           const originalAlpha = new Uint8Array(w * h);
-          const alphaMap = new Uint8Array(w * h);
           for (let i = 0; i < data.length; i += 4) {
-            const alpha = data[i + 3];
-            originalAlpha[i / 4] = alpha;
-            alphaMap[i / 4] = alpha >= 20 ? alpha : 0;
+            originalAlpha[i / 4] = data[i + 3];
           }
           
-          console.log('Step 2: Remove isolated pixels (despeckle)...');
-          const despeckled = new Uint8Array(alphaMap);
+          console.log('Step 2: Create clean alpha mask for stroke generation only...');
+          const strokeMask = new Uint8Array(w * h);
+          for (let i = 0; i < originalAlpha.length; i++) {
+            strokeMask[i] = originalAlpha[i] > 30 ? 255 : 0;
+          }
+          
+          console.log('Step 3: Light despeckle on stroke mask only (preserve original)...');
+          const despeckled = new Uint8Array(strokeMask);
           for (let y = 1; y < h - 1; y++) {
             for (let x = 1; x < w - 1; x++) {
               const idx = y * w + x;
-              if (alphaMap[idx] === 0) continue;
+              if (strokeMask[idx] === 0) continue;
               
               let opaqueNeighbors = 0;
               for (let dy = -1; dy <= 1; dy++) {
                 for (let dx = -1; dx <= 1; dx++) {
                   if (dx === 0 && dy === 0) continue;
                   const nIdx = (y + dy) * w + (x + dx);
-                  if (alphaMap[nIdx] > 20) opaqueNeighbors++;
+                  if (strokeMask[nIdx] > 0) opaqueNeighbors++;
                 }
               }
               
-              if (opaqueNeighbors < 3) {
+              if (opaqueNeighbors <= 1) {
                 despeckled[idx] = 0;
               }
             }
           }
           
-          console.log('Step 3: Keep only largest connected component...');
-          const cleanedAlpha = keepLargestComponent(despeckled, w, h);
+          console.log('Step 4: Keep largest component for stroke mask...');
+          const cleanMask = keepLargestComponent(despeckled, w, h);
           
-          console.log('Step 4: Morphological closing to fill small gaps...');
-          const closed = new Uint8Array(cleanedAlpha);
+          console.log('Step 5: Light morphological smoothing on stroke mask...');
+          const smoothMask = new Uint8Array(cleanMask);
           
-          for (let iter = 0; iter < 2; iter++) {
-            const temp = new Uint8Array(closed);
+          for (let iter = 0; iter < 1; iter++) {
+            const temp = new Uint8Array(smoothMask);
             for (let y = 1; y < h - 1; y++) {
               for (let x = 1; x < w - 1; x++) {
                 const idx = y * w + x;
-                let maxAlpha = temp[idx];
+                let maxVal = temp[idx];
                 
                 for (let dy = -1; dy <= 1; dy++) {
                   for (let dx = -1; dx <= 1; dx++) {
                     const nIdx = (y + dy) * w + (x + dx);
-                    maxAlpha = Math.max(maxAlpha, temp[nIdx]);
+                    maxVal = Math.max(maxVal, temp[nIdx]);
                   }
                 }
                 
-                closed[idx] = maxAlpha;
+                smoothMask[idx] = maxVal;
               }
             }
           }
           
-          for (let iter = 0; iter < 2; iter++) {
-            const temp = new Uint8Array(closed);
+          for (let iter = 0; iter < 1; iter++) {
+            const temp = new Uint8Array(smoothMask);
             for (let y = 1; y < h - 1; y++) {
               for (let x = 1; x < w - 1; x++) {
                 const idx = y * w + x;
-                let minAlpha = temp[idx];
+                let minVal = temp[idx];
                 
                 for (let dy = -1; dy <= 1; dy++) {
                   for (let dx = -1; dx <= 1; dx++) {
                     const nIdx = (y + dy) * w + (x + dx);
-                    minAlpha = Math.min(minAlpha, temp[nIdx]);
+                    minVal = Math.min(minVal, temp[nIdx]);
                   }
                 }
                 
-                closed[idx] = minAlpha;
+                smoothMask[idx] = minVal;
               }
             }
           }
           
-          console.log('Step 5: Create stroke by dilation...');
-          const dilatedAlpha = new Uint8Array(closed);
+          console.log('Step 6: Dilate stroke mask to create stroke outline...');
+          const dilatedMask = new Uint8Array(smoothMask);
           
           for (let iter = 0; iter < strokeWidth; iter++) {
-            const source = new Uint8Array(dilatedAlpha);
+            const source = new Uint8Array(dilatedMask);
             
             for (let y = 0; y < h; y++) {
               for (let x = 0; x < w; x++) {
                 const idx = y * w + x;
                 
-                if (closed[idx] > 20) {
-                  dilatedAlpha[idx] = 255;
+                if (smoothMask[idx] > 0) {
+                  dilatedMask[idx] = 255;
                   continue;
                 }
                 
@@ -636,7 +640,7 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
                     
                     if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
                       const nIdx = ny * w + nx;
-                      if (source[nIdx] > 20) {
+                      if (source[nIdx] > 0) {
                         hasOpaqueNeighbor = true;
                         break;
                       }
@@ -646,15 +650,15 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
                 }
                 
                 if (hasOpaqueNeighbor) {
-                  dilatedAlpha[idx] = 255;
+                  dilatedMask[idx] = 255;
                 }
               }
             }
           }
           
-          console.log('Step 6: Apply Gaussian blur for smooth edges...');
-          let blurredStroke = new Uint8Array(dilatedAlpha);
-          const blurRadius = 2.5;
+          console.log('Step 7: Apply Gaussian blur for smooth stroke edges...');
+          let blurredStroke = new Uint8Array(dilatedMask);
+          const blurRadius = 1.8;
           const blurPasses = 2;
           
           for (let pass = 0; pass < blurPasses; pass++) {
@@ -664,7 +668,7 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
               for (let x = 0; x < w; x++) {
                 const idx = y * w + x;
                 
-                if (closed[idx] > 200) {
+                if (smoothMask[idx] > 0) {
                   blurredStroke[idx] = 255;
                   continue;
                 }
@@ -693,46 +697,34 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
             }
           }
           
-          console.log('Step 7: Create final alpha with smooth stroke...');
-          const finalAlpha = new Uint8Array(w * h);
-          
-          for (let i = 0; i < w * h; i++) {
-            if (closed[i] > 20) {
-              finalAlpha[i] = closed[i];
-            } else {
-              finalAlpha[i] = blurredStroke[i];
-            }
-          }
-          
-          console.log('Step 8: Composite final image with smooth edges...');
+          console.log('Step 8: Composite - preserve ALL original pixels, add stroke behind...');
           const r = parseInt(strokeColor.slice(1, 3), 16);
           const g = parseInt(strokeColor.slice(3, 5), 16);
           const b = parseInt(strokeColor.slice(5, 7), 16);
           
-          const strokeData = ctx.createImageData(w, h);
-          const strokePixels = strokeData.data;
+          const finalData = ctx.createImageData(w, h);
+          const finalPixels = finalData.data;
           
           for (let i = 0; i < w * h; i++) {
-            const origAlpha = originalAlpha[i];
-            const strokeAlpha = finalAlpha[i];
-            
             const idx = i * 4;
+            const origAlpha = originalAlpha[i];
+            const strokeAlpha = blurredStroke[i];
             
             if (origAlpha > 10) {
-              strokePixels[idx] = data[idx];
-              strokePixels[idx + 1] = data[idx + 1];
-              strokePixels[idx + 2] = data[idx + 2];
-              strokePixels[idx + 3] = origAlpha;
+              finalPixels[idx] = originalRGBA[idx];
+              finalPixels[idx + 1] = originalRGBA[idx + 1];
+              finalPixels[idx + 2] = originalRGBA[idx + 2];
+              finalPixels[idx + 3] = origAlpha;
             } else if (strokeAlpha > 10) {
-              strokePixels[idx] = r;
-              strokePixels[idx + 1] = g;
-              strokePixels[idx + 2] = b;
-              strokePixels[idx + 3] = strokeAlpha;
+              finalPixels[idx] = r;
+              finalPixels[idx + 1] = g;
+              finalPixels[idx + 2] = b;
+              finalPixels[idx + 3] = strokeAlpha;
             }
           }
           
           ctx.clearRect(0, 0, w, h);
-          ctx.putImageData(strokeData, 0, 0);
+          ctx.putImageData(finalData, 0, 0);
           
           canvas.toBlob(
             (blob) => {
