@@ -8,9 +8,9 @@ const generateSheetLayoutInputSchema = z.object({
   sheetSize: sheetSizeSchema,
   cellSizeInches: z.number().default(0.25),
   outerMarginInches: z.number().default(0.125),
-  cellGapInches: z.number().default(0.06),
-  bleedInches: z.number().default(0.06),
-  whiteBorderInches: z.number().default(0.04),
+  cellGapInches: z.number().default(0.25),
+  bleedInches: z.number().default(0.0),
+  whiteBorderInches: z.number().default(0.0),
   dpi: z.number().default(300),
 });
 

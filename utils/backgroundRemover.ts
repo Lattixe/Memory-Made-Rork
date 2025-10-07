@@ -500,6 +500,109 @@ function keepLargestComponent(alphaMap: Uint8Array, w: number, h: number): Uint8
   return cleaned;
 }
 
+async function gentleEdgeCleanup(base64Image: string): Promise<string> {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') {
+    return base64Image;
+  }
+
+  return new Promise((resolve) => {
+    const timeoutId = setTimeout(() => {
+      console.log('Edge cleanup timeout - using original');
+      resolve(base64Image);
+    }, 2000);
+    
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      
+      if (!ctx) {
+        clearTimeout(timeoutId);
+        resolve(base64Image);
+        return;
+      }
+      
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      img.onload = () => {
+        try {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          
+          ctx.drawImage(img, 0, 0);
+          
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          
+          const w = canvas.width;
+          const h = canvas.height;
+          
+          console.log('Applying minimal edge cleanup for print quality...');
+          
+          for (let i = 0; i < data.length; i += 4) {
+            const a = data[i + 3];
+            
+            if (a < 10) {
+              data[i + 3] = 0;
+              continue;
+            }
+            
+            if (a > 0 && a < 30) {
+              const r = data[i];
+              const g = data[i + 1];
+              const b = data[i + 2];
+              const brightness = (r + g + b) / 3;
+              
+              if (brightness > 240) {
+                data[i + 3] = 0;
+              }
+            }
+          }
+          
+          ctx.putImageData(imageData, 0, 0);
+          
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                clearTimeout(timeoutId);
+                resolve(base64Image);
+                return;
+              }
+              
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const result = reader.result as string;
+                const base64Result = result.split(',')[1];
+                clearTimeout(timeoutId);
+                console.log('Gentle edge cleanup complete');
+                resolve(base64Result);
+              };
+              reader.readAsDataURL(blob);
+            },
+            'image/png',
+            1.0
+          );
+        } catch (error) {
+          clearTimeout(timeoutId);
+          console.error('Error in edge cleanup:', error);
+          resolve(base64Image);
+        }
+      };
+      
+      img.onerror = () => {
+        clearTimeout(timeoutId);
+        resolve(base64Image);
+      };
+      
+      img.src = `data:image/png;base64,${base64Image}`;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      console.error('Error in edge cleanup:', error);
+      resolve(base64Image);
+    }
+  });
+}
+
 export async function addStrokeToImage(base64Image: string, strokeWidth: number = 3, strokeColor: string = '#FFFFFF'): Promise<string> {
   if (Platform.OS !== 'web' || typeof document === 'undefined') {
     return base64Image;
@@ -772,10 +875,10 @@ export async function processStickerImage(
   base64Image: string,
   skipBackgroundRemoval: boolean = false,
   isAIGenerated: boolean = true,
-  addStroke: boolean = true
+  addStroke: boolean = false
 ): Promise<string> {
   try {
-    console.log('Processing sticker image...');
+    console.log('Processing sticker image for Printful compliance...');
 
     let processedImage = base64Image;
 
@@ -790,13 +893,12 @@ export async function processStickerImage(
       processedImage = await Promise.race([removalPromise, timeoutPromise]);
     }
 
-    // Add stroke to preserve cut line after background removal
-    if (addStroke && Platform.OS === 'web') {
+    if (Platform.OS === 'web') {
       try {
-        console.log('Adding white stroke to preserve cut line...');
-        processedImage = await addStrokeToImage(processedImage, 3, '#FFFFFF');
-      } catch (strokeError) {
-        console.log('Stroke addition failed, continuing without stroke');
+        console.log('Applying gentle edge cleanup for print quality...');
+        processedImage = await gentleEdgeCleanup(processedImage);
+      } catch (cleanupError) {
+        console.log('Edge cleanup failed, continuing without cleanup');
       }
     }
 

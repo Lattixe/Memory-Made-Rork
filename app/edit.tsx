@@ -23,6 +23,7 @@ import { useUser } from '@/contexts/UserContext';
 import { safeJsonParse } from '@/utils/json';
 import { compressBase64Image, estimateBase64Size } from '@/utils/imageCompression';
 import { processStickerImage } from '@/utils/backgroundRemover';
+import { exportForPrintful } from '@/utils/printfulExport';
 import { getEditPrompt } from '@/utils/promptManager';
 import { callImageEditApi } from '@/utils/imageEditApi';
 
@@ -309,8 +310,8 @@ const EditScreen = () => {
       
       console.log('Edit completed successfully!');
       
-      console.log('Applying enhanced background removal, stroke, and auto-cropping...');
-      const cleanedBase64 = await processStickerImage(data.image.base64Data, false, true, true);
+      console.log('Applying Printful-compliant processing (no stroke, gentle cleanup)...');
+      const cleanedBase64 = await processStickerImage(data.image.base64Data, false, true, false);
       
       return {
         image: {

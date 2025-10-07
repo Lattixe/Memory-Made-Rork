@@ -12,9 +12,9 @@ export type StickerCountOption = {
   description: string;
 };
 
-// Global constants
+// Global constants - Printful compliant
 const OUTER_MARGIN_INCHES = 0.125;
-const GUTTER_INCHES = 0.08;
+const GUTTER_INCHES = 0.25;
 const DPI = 300;
 
 // Formula: a = (U - (N - 1) * G) / N
