@@ -10,6 +10,15 @@ type ImageEditResponse = {
   image: { base64Data: string; mimeType: string };
 };
 
+type GptImageRequest = {
+  prompt: string;
+  images: Array<{ type: 'image'; image: string }>;
+};
+
+type GptImageResponse = {
+  image: { base64Data: string; mimeType: string };
+};
+
 type SeeDreamRequest = {
   prompt: string;
   image_url: string;
@@ -84,6 +93,77 @@ async function callNanoBananaApi(
     }
     
     console.log('Nano Banana API call successful');
+    return data;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out');
+    }
+    
+    throw error;
+  }
+}
+
+async function callGptImageMiniApi(
+  base64Data: string,
+  prompt: string,
+  timeout: number = 4000
+): Promise<ImageEditResponse> {
+  const requestBody: GptImageRequest = {
+    prompt,
+    images: [{ type: 'image', image: base64Data }],
+  };
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    console.log('Calling GPT Image 1 Mini API...');
+    
+    const response = await fetch('https://toolkit.rork.com/images/edit/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (response.status >= 502 && response.status <= 504) {
+      throw new Error(`Server temporarily unavailable (${response.status})`);
+    }
+    
+    if (response.status === 429) {
+      throw new Error('Rate limited');
+    }
+
+    if (!response.ok) {
+      throw new Error(`API Error ${response.status}`);
+    }
+
+    const responseText = await response.text();
+    
+    if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
+      throw new Error('Received error page');
+    }
+    
+    const jsonResult = safeJsonParse<GptImageResponse>(responseText);
+    
+    if (!jsonResult.success) {
+      throw new Error('Invalid response format');
+    }
+    
+    const data = jsonResult.data!;
+    
+    if (!data?.image?.base64Data) {
+      throw new Error('Incomplete response');
+    }
+    
+    console.log('GPT Image 1 Mini API call successful');
     return data;
   } catch (error: any) {
     clearTimeout(timeoutId);
@@ -192,21 +272,23 @@ export async function callImageEditApi(
   retryCount: number = 0
 ): Promise<ImageEditResponse> {
   const settings = await getAdminSettings();
-  const model: EditModel = settings.editModel || 'nano-banana';
+  const model: EditModel = settings.editModel || 'gpt-image-1-mini';
   
   console.log(`Using model: ${model}`);
   
   try {
     if (model === 'seedream') {
       return await callSeeDreamApi(base64Data, prompt);
+    } else if (model === 'gpt-image-1-mini') {
+      return await callGptImageMiniApi(base64Data, prompt);
     } else {
       return await callNanoBananaApi(base64Data, prompt);
     }
   } catch (error: any) {
     console.error(`${model} API error:`, error.message);
     
-    if (retryCount < 1 && model === 'nano-banana') {
-      console.log('Retrying Nano Banana...');
+    if (retryCount < 1 && (model === 'nano-banana' || model === 'gpt-image-1-mini')) {
+      console.log(`Retrying ${model}...`);
       await new Promise(resolve => setTimeout(resolve, 500));
       return callImageEditApi(base64Data, prompt, retryCount + 1);
     }

@@ -20,7 +20,7 @@ import { StickerSettingsPanel, DEFAULT_SETTINGS as DEFAULT_STICKER_SETTINGS, Sti
 const ADMIN_SETTINGS_KEY = '@admin_settings';
 const STICKER_SETTINGS_KEY = '@sticker_processing_settings';
 
-export type EditModel = 'nano-banana' | 'seedream';
+export type EditModel = 'gpt-image-1-mini' | 'nano-banana' | 'seedream';
 
 export interface AdminSettings {
   placeholder?: boolean;
@@ -41,7 +41,7 @@ const DEFAULT_SETTINGS: AdminSettings = {
   initialGenerationPrompt: DEFAULT_INITIAL_GENERATION_PROMPT,
   regenerationPrompt: DEFAULT_REGENERATION_PROMPT,
   editPrompt: DEFAULT_EDIT_PROMPT,
-  editModel: 'nano-banana',
+  editModel: 'gpt-image-1-mini',
 };
 
 export async function getAdminSettings(): Promise<AdminSettings> {
@@ -73,7 +73,7 @@ export default function AdminSettings() {
     type: 'initial' | 'regeneration' | 'edit';
     value: string;
   } | null>(null);
-  const [selectedModel, setSelectedModel] = useState<EditModel>('nano-banana');
+  const [selectedModel, setSelectedModel] = useState<EditModel>('gpt-image-1-mini');
   const [showStickerSettings, setShowStickerSettings] = useState<boolean>(false);
   const [stickerSettings, setStickerSettings] = useState<StickerProcessingSettings>(DEFAULT_STICKER_SETTINGS);
 
@@ -85,7 +85,7 @@ export default function AdminSettings() {
   const loadSettings = async () => {
     const loaded = await getAdminSettings();
     setSettings(loaded);
-    setSelectedModel(loaded.editModel || 'nano-banana');
+    setSelectedModel(loaded.editModel || 'gpt-image-1-mini');
   };
 
   const loadStickerSettings = async () => {
@@ -419,6 +419,32 @@ export default function AdminSettings() {
             </Text>
 
             <View style={styles.modelSelectionContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.modelOption,
+                  selectedModel === 'gpt-image-1-mini' && styles.modelOptionSelected,
+                ]}
+                onPress={async () => {
+                  setSelectedModel('gpt-image-1-mini');
+                  const updatedSettings = { ...settings, editModel: 'gpt-image-1-mini' as EditModel };
+                  await saveAdminSettings(updatedSettings);
+                  setSettings(updatedSettings);
+                  Alert.alert('Success', 'Model updated to GPT Image 1 Mini');
+                }}
+              >
+                <View style={styles.modelOptionContent}>
+                  <Text style={styles.modelOptionTitle}>GPT Image 1 Mini</Text>
+                  <Text style={styles.modelOptionDescription}>
+                    OpenAI GPT Image 1 Mini - Fast and efficient image editing (Default)
+                  </Text>
+                </View>
+                {selectedModel === 'gpt-image-1-mini' && (
+                  <View style={styles.selectedBadge}>
+                    <Text style={styles.selectedBadgeText}>✓</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={[
                   styles.modelOption,
