@@ -31,7 +31,7 @@ export const generateImageProcedure = publicProcedure
       background: z.enum(['transparent', 'opaque', 'auto']).default('transparent'),
       content_moderation: z.enum(['low', 'medium', 'high']).default('low'),
       quality: z.enum(['low', 'medium', 'high']).default('medium'),
-      timeout: z.number().default(60000),
+      timeout: z.number().default(120000),
     })
   )
   .mutation(async ({ input }) => {
@@ -52,11 +52,12 @@ export const generateImageProcedure = publicProcedure
       console.log(`[backend] Calling OpenAI ${model} API for image generation...`);
       console.log(`[backend] Settings: size=${size}, background=${background}, output_format=png, content_moderation=${content_moderation}, quality=${quality}`);
 
-      const requestBody: OpenAIImageGenerateRequest = {
+      const requestBody: any = {
         model,
         prompt,
         n: 1,
         size,
+        response_format: 'b64_json',
         output_format: 'png',
         background,
         content_moderation,
@@ -77,6 +78,8 @@ export const generateImageProcedure = publicProcedure
         body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
+
+      console.log('[backend] OpenAI response status:', response.status);
 
       clearTimeout(timeoutId);
 

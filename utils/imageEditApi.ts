@@ -100,10 +100,11 @@ async function callNanoBananaApi(
 async function callGptImageMiniApi(
   base64Data: string,
   prompt: string,
-  timeout: number = 60000
+  timeout: number = 120000
 ): Promise<ImageEditResponse> {
   try {
     console.log('Using OpenAI GPT Image 1 Mini API with transparent background via backend...');
+    console.log('Timeout set to:', timeout, 'ms');
     
     return await trpcClient.openai.editImage.mutate({
       base64Data,

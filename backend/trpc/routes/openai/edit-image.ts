@@ -2,18 +2,6 @@ import { z } from "zod";
 import { publicProcedure } from "@/backend/trpc/create-context";
 import { safeJsonParse } from "@/utils/json";
 
-type OpenAIImageEditRequest = {
-  model: 'gpt-image-1-mini' | 'gpt-image-1';
-  prompt: string;
-  image: string;
-  n?: number;
-  size?: '1024x1024' | '1024x1792' | '1792x1024';
-  output_format?: 'png' | 'webp';
-  background?: 'transparent' | 'opaque' | 'auto';
-  content_moderation?: 'low' | 'medium' | 'high';
-  quality?: 'low' | 'medium' | 'high';
-};
-
 type OpenAIImageEditResponse = {
   created: number;
   data: {
@@ -33,7 +21,7 @@ export const editImageProcedure = publicProcedure
       background: z.enum(['transparent', 'opaque', 'auto']).default('transparent'),
       content_moderation: z.enum(['low', 'medium', 'high']).default('low'),
       quality: z.enum(['low', 'medium', 'high']).default('medium'),
-      timeout: z.number().default(60000),
+      timeout: z.number().default(120000),
     })
   )
   .mutation(async ({ input }) => {
@@ -55,32 +43,38 @@ export const editImageProcedure = publicProcedure
       console.log(`[backend] Calling OpenAI ${model} API for image editing...`);
       console.log(`[backend] Settings: size=${size}, background=${background}, output_format=png, content_moderation=${content_moderation}, quality=${quality}`);
 
-      const requestBody: OpenAIImageEditRequest = {
-        model,
-        prompt,
-        image: base64Data,
-        n: 1,
-        size,
-        output_format: 'png',
-        background,
-        content_moderation,
-        quality,
-      };
-
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
         throw new Error('OpenAI API key not configured on server');
       }
 
+      const imageBuffer = Buffer.from(base64Data, 'base64');
+      
+      const FormData = (await import('formdata-node')).FormData;
+      const { Blob } = await import('buffer');
+      
+      const formData = new FormData();
+      formData.append('model', model);
+      formData.append('prompt', prompt);
+      formData.append('image', new Blob([imageBuffer]), 'image.png');
+      formData.append('n', '1');
+      formData.append('size', size);
+      formData.append('response_format', 'b64_json');
+      formData.append('output_format', 'png');
+      formData.append('background', background);
+      formData.append('content_moderation', content_moderation);
+      formData.append('quality', quality);
+
       const response = await fetch('https://api.openai.com/v1/images/edits', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
         },
-        body: JSON.stringify(requestBody),
+        body: formData as any,
         signal: controller.signal,
       });
+
+      console.log('[backend] OpenAI response status:', response.status);
 
       clearTimeout(timeoutId);
 
