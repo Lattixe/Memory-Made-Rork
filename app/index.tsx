@@ -25,6 +25,7 @@ import StickerGallery from '@/components/StickerGallery';
 import { safeJsonParse } from '@/utils/json';
 import { processStickerImage } from '@/utils/backgroundRemover';
 import { getInitialGenerationPrompt, getRegenerationPrompt } from '@/utils/promptManager';
+import { callImageEditApi } from '@/utils/imageEditApi';
 
 
 type ImageEditRequest = {
@@ -201,94 +202,19 @@ export default function UploadScreen() {
   }, []);
 
   const processImageWithRetry = useCallback(async (base64Data: string, retryCount: number = 0): Promise<ImageEditResponse> => {
-    const maxRetries = 5; // Increased retries for better reliability
-    const baseTimeout = 90000; // 90 seconds base timeout
-    const timeout = baseTimeout + (retryCount * 30000); // Add 30s per retry
-    
-    const prompt = await getInitialGenerationPrompt();
-    
-    const requestBody: ImageEditRequest = {
-      prompt,
-      images: [{ type: 'image', image: base64Data }],
-    };
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
     try {
-      console.log(`Sending request to AI API (attempt ${retryCount + 1}/${maxRetries + 1}) with ${timeout/1000}s timeout...`);
+      console.log('Starting initial sticker generation with gpt-image-1-mini...');
       
-      const response = await fetch('https://toolkit.rork.com/images/edit/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Unknown error');
-        console.error(`API Error ${response.status}:`, errorText.substring(0, 500));
-        
-        // More aggressive retry strategy for server errors
-        if ((response.status >= 500 || response.status === 429 || response.status === 408) && retryCount < maxRetries) {
-          const delay = Math.min(3000 * Math.pow(1.5, retryCount), 15000);
-          console.log(`Server error (${response.status}), retrying in ${delay/1000} seconds...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          return processImageWithRetry(base64Data, retryCount + 1);
-        }
-        
-        throw new Error(`API request failed with status ${response.status}`);
-      }
-
-      const responseText = await response.text();
+      const prompt = await getInitialGenerationPrompt();
       
-      // Enhanced JSON parsing with better error handling
-      if (!responseText || responseText.trim().length === 0) {
-        throw new Error('Empty response from server');
-      }
-      
-      // Check if response looks like HTML (error page)
-      if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
-        console.error('Received HTML error page instead of JSON:', responseText.substring(0, 200));
-        throw new Error('Server returned an error page instead of data');
-      }
-      
-      // Use safe JSON parsing to handle potential parsing errors
-      const parseResult = safeJsonParse<ImageEditResponse>(responseText);
-      
-      if (!parseResult.success) {
-        console.error('JSON parse error:', parseResult.error);
-        console.error('Response preview:', responseText.substring(0, 300));
-        
-        // If JSON parsing fails, it might be a server error - retry
-        if (retryCount < maxRetries) {
-          const delay = Math.min(2000 * Math.pow(1.5, retryCount), 10000);
-          console.log(`JSON parse failed, retrying in ${delay/1000} seconds...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          return processImageWithRetry(base64Data, retryCount + 1);
-        }
-        
-        throw new Error(`Server returned invalid data format: ${parseResult.error}`);
-      }
-      
-      const data = parseResult.data!;
-      
-      // Validate response structure
-      if (!data || !data.image || !data.image.base64Data) {
-        console.error('Invalid response structure:', data);
-        throw new Error('Server returned incomplete image data');
-      }
+      // Use callImageEditApi which respects the model selection from admin settings
+      const data = await callImageEditApi(base64Data, prompt, retryCount);
       
       console.log('AI processing completed successfully!');
       
       // Apply aggressive background removal for AI-generated stickers
       console.log('Applying enhanced background removal and auto-cropping...');
-      const cleanedBase64 = await processStickerImage(data.image.base64Data, false, true); // Don't skip removal, mark as AI-generated
+      const cleanedBase64 = await processStickerImage(data.image.base64Data, false, true);
       
       return {
         image: {
@@ -297,53 +223,7 @@ export default function UploadScreen() {
         }
       };
     } catch (error: any) {
-      clearTimeout(timeoutId);
-      
-      if (error.name === 'AbortError' || error.message?.includes('timed out')) {
-        if (retryCount < maxRetries) {
-          // Exponential backoff with jitter
-          const baseDelay = 5000;
-          const maxDelay = 30000;
-          const jitter = Math.random() * 3000; // 0-3 seconds random jitter
-          const delay = Math.min(baseDelay * Math.pow(2, retryCount) + jitter, maxDelay);
-          
-          console.log(`Request timed out (attempt ${retryCount + 1}/${maxRetries}), retrying in ${Math.round(delay/1000)} seconds...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          return processImageWithRetry(base64Data, retryCount + 1);
-        }
-        throw new Error('Request timed out after multiple attempts. The server may be overloaded.');
-      }
-      
-      // Enhanced error detection and retry logic
-      const errorMessage = error.message?.toLowerCase() || '';
-      const shouldRetry = retryCount < maxRetries && (
-        errorMessage.includes('504') || 
-        errorMessage.includes('502') || 
-        errorMessage.includes('503') ||
-        errorMessage.includes('500') ||
-        errorMessage.includes('timeout') ||
-        errorMessage.includes('timed out') ||
-        errorMessage.includes('network') ||
-        errorMessage.includes('fetch') ||
-        errorMessage.includes('failed to fetch') ||
-        errorMessage.includes('server returned') ||
-        errorMessage.includes('empty response') ||
-        errorMessage.includes('overloaded') ||
-        errorMessage.includes('abort')
-      );
-      
-      if (shouldRetry) {
-        // Exponential backoff with jitter for server errors
-        const baseDelay = 4000;
-        const maxDelay = 25000;
-        const jitter = Math.random() * 2000;
-        const delay = Math.min(baseDelay * Math.pow(1.8, retryCount) + jitter, maxDelay);
-        
-        console.log(`Server/network error (${error.message}), retrying in ${Math.round(delay/1000)} seconds...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return processImageWithRetry(base64Data, retryCount + 1);
-      }
-      
+      console.error('Error in initial generation:', error);
       throw error;
     }
   }, []);
@@ -357,10 +237,10 @@ export default function UploadScreen() {
     Keyboard.dismiss();
     // Immediate UI feedback
     setIsGenerating(true);
-    console.log('Starting AI sticker generation from prompt using Gemini Flash...');
+    console.log('Starting AI sticker generation from prompt with gpt-image-1-mini...');
     
     try {
-      // Create a simple white canvas as base image for Gemini to work with
+      // Create a simple white canvas as base image
       let base64Data: string;
       
       if (Platform.OS === 'web') {
@@ -382,61 +262,8 @@ export default function UploadScreen() {
 
       const prompt = await getRegenerationPrompt(promptText);
       
-      const requestBody: ImageEditRequest = {
-        prompt,
-        images: [{ type: 'image', image: base64Data }],
-      };
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout for generation
-
-      const response = await fetch('https://toolkit.rork.com/images/edit/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Unknown error');
-        console.error(`API Error ${response.status}:`, errorText.substring(0, 500));
-        throw new Error(`Failed to generate sticker: ${response.status}`);
-      }
-
-      const responseText = await response.text();
-      
-      // Enhanced JSON parsing with better error handling
-      if (!responseText || responseText.trim().length === 0) {
-        throw new Error('Empty response from server');
-      }
-      
-      // Check if response looks like HTML (error page)
-      if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
-        console.error('Received HTML error page instead of JSON:', responseText.substring(0, 200));
-        throw new Error('Server returned an error page instead of data');
-      }
-      
-      // Use safe JSON parsing to handle potential parsing errors
-      const parseResult = safeJsonParse<ImageEditResponse>(responseText);
-      
-      if (!parseResult.success) {
-        console.error('JSON parse error:', parseResult.error);
-        console.error('Response preview:', responseText.substring(0, 300));
-        throw new Error(`Server returned invalid data format: ${parseResult.error}`);
-      }
-      
-      const data = parseResult.data!;
-      
-      // Validate response structure
-      if (!data || !data.image || !data.image.base64Data) {
-        console.error('Invalid response structure:', data);
-        throw new Error('Server returned incomplete image data');
-      }
+      // Use callImageEditApi which respects the model selection from admin settings
+      const data = await callImageEditApi(base64Data, prompt);
 
       console.log('AI generation completed successfully!');
       
