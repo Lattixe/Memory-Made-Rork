@@ -104,9 +104,10 @@ async function callGptImageMiniApi(
 ): Promise<ImageEditResponse> {
   try {
     console.log('Using OpenAI GPT Image 1 Mini API with transparent background via backend...');
+    console.log('Backend URL:', process.env.EXPO_PUBLIC_RORK_API_BASE_URL || 'Not set');
     console.log('Timeout set to:', timeout, 'ms');
     
-    return await trpcClient.openai.editImage.mutate({
+    const result = await trpcClient.openai.editImage.mutate({
       base64Data,
       prompt,
       model: 'gpt-image-1-mini',
@@ -116,8 +117,17 @@ async function callGptImageMiniApi(
       quality: 'medium',
       timeout,
     });
+    
+    console.log('GPT Image 1 Mini API call successful via backend');
+    return result;
   } catch (error: any) {
     console.error('GPT Image 1 Mini API error:', error.message);
+    console.error('Error details:', error);
+    
+    if (error.message?.includes('Cannot connect to backend') || error.message?.includes('Failed to fetch')) {
+      throw new Error('Cannot connect to backend server. Please check your connection and try again.');
+    }
+    
     throw error;
   }
 }
