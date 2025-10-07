@@ -16,13 +16,14 @@ import {
   FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Save, Sparkles, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { ArrowLeft, Save, Sparkles, RotateCcw, ChevronLeft, ChevronRight, Settings } from 'lucide-react-native';
 import { neutralColors } from '@/constants/colors';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useUser } from '@/contexts/UserContext';
 import { safeJsonParse } from '@/utils/json';
 import { compressBase64Image, estimateBase64Size } from '@/utils/imageCompression';
 import { processStickerImage } from '@/utils/backgroundRemover';
+import { StickerSettingsPanel, StickerProcessingSettings, DEFAULT_SETTINGS } from '@/components/StickerSettingsPanel';
 import { exportForPrintful } from '@/utils/printfulExport';
 import { getEditPrompt } from '@/utils/promptManager';
 import { callImageEditApi } from '@/utils/imageEditApi';
@@ -55,6 +56,8 @@ const EditScreen = () => {
   const [editPrompt, setEditPrompt] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [currentVersionIndex, setCurrentVersionIndex] = useState<number>(0);
+  const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [processingSettings, setProcessingSettings] = useState<StickerProcessingSettings>(DEFAULT_SETTINGS);
   const textInputRef = useRef<TextInput>(null);
   const flatListRef = useRef<FlatList>(null);
   
@@ -310,8 +313,13 @@ const EditScreen = () => {
       
       console.log('Edit completed successfully!');
       
-      console.log('Applying Printful-compliant processing (no stroke, gentle cleanup)...');
-      const cleanedBase64 = await processStickerImage(data.image.base64Data, false, true, false);
+      console.log('Applying processing with current settings...');
+      const cleanedBase64 = await processStickerImage(
+        data.image.base64Data,
+        processingSettings.skipBackgroundRemoval,
+        processingSettings.isAIGenerated,
+        processingSettings.addStroke
+      );
       
       return {
         image: {
@@ -531,16 +539,22 @@ const EditScreen = () => {
           <View style={styles.headerTitleContainer}>
             <Text style={styles.headerTitle}>Edit Sticker</Text>
           </View>
-          {versions.length > 1 ? (
+          <View style={styles.headerRight}>
+            {versions.length > 1 && (
+              <TouchableOpacity
+                style={styles.headerIconButton}
+                onPress={handleResetToOriginal}
+              >
+                <RotateCcw size={16} color={neutralColors.text.secondary} />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
-              style={styles.resetButton}
-              onPress={handleResetToOriginal}
+              style={styles.headerIconButton}
+              onPress={() => setShowSettings(true)}
             >
-              <RotateCcw size={16} color={neutralColors.text.secondary} />
+              <Settings size={16} color={neutralColors.text.secondary} />
             </TouchableOpacity>
-          ) : (
-            <View style={styles.headerSpacer} />
-          )}
+          </View>
         </View>
 
         <View style={styles.mainContent}>
@@ -685,6 +699,14 @@ const EditScreen = () => {
           </View>
         </View>
         </SafeAreaView>
+
+        <StickerSettingsPanel
+          visible={showSettings}
+          onClose={() => setShowSettings(false)}
+          settings={processingSettings}
+          onSettingsChange={setProcessingSettings}
+          onResetToDefaults={() => setProcessingSettings(DEFAULT_SETTINGS)}
+        />
       </View>
     </TouchableWithoutFeedback>
   );
@@ -728,8 +750,15 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     color: neutralColors.text.primary,
   },
-  headerSpacer: {
-    width: 36,
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerIconButton: {
+    padding: 6,
+    borderRadius: 10,
+    backgroundColor: neutralColors.surface,
   },
   scrollView: {
     flex: 1,
