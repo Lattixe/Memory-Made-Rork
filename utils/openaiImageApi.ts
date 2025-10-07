@@ -76,7 +76,6 @@ export async function callOpenAIImageGenerate(
     form.append('n', String(requestBody.n ?? 1));
     form.append('size', requestBody.size ?? '1024x1024');
     if (requestBody.background) form.append('background', requestBody.background);
-    form.append('response_format', 'b64_json');
 
     const response = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
@@ -198,7 +197,6 @@ export async function callOpenAIImageEdit(
     form.append('n', String(requestBody.n ?? 1));
     form.append('size', requestBody.size ?? '1024x1024');
     if (requestBody.background) form.append('background', requestBody.background);
-    form.append('response_format', 'b64_json');
 
     const dataUri = `data:image/png;base64,${base64Data}`;
     if (Platform.OS === 'web') {
