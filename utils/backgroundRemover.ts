@@ -199,10 +199,10 @@ export async function autoCropImage(base64Image: string): Promise<string> {
           let maxX = 0;
           let maxY = 0;
           
-          for (let y = 0; y < canvas.height; y += 4) {
-            for (let x = 0; x < canvas.width; x += 4) {
+          for (let y = 0; y < canvas.height; y++) {
+            for (let x = 0; x < canvas.width; x++) {
               const idx = (y * canvas.width + x) * 4;
-              if (data[idx + 3] > 20) {
+              if (data[idx + 3] > 5) {
                 minX = Math.min(minX, x);
                 minY = Math.min(minY, y);
                 maxX = Math.max(maxX, x);
@@ -211,7 +211,7 @@ export async function autoCropImage(base64Image: string): Promise<string> {
             }
           }
           
-          const padding = 10;
+          const padding = 20;
           minX = Math.max(0, minX - padding);
           minY = Math.max(0, minY - padding);
           maxX = Math.min(canvas.width - 1, maxX + padding);
@@ -542,12 +542,12 @@ async function gentleEdgeCleanup(base64Image: string): Promise<string> {
           for (let i = 0; i < data.length; i += 4) {
             const a = data[i + 3];
             
-            if (a < 10) {
+            if (a < 3) {
               data[i + 3] = 0;
               continue;
             }
             
-            if (a > 0 && a < 30) {
+            if (a > 0 && a < 10) {
               const r = data[i];
               const g = data[i + 1];
               const b = data[i + 2];
@@ -653,30 +653,11 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
             strokeMask[i] = originalAlpha[i] > 30 ? 255 : 0;
           }
           
-          console.log('Step 3: Light despeckle on stroke mask only (preserve original)...');
+          console.log('Step 3: SKIP despeckle to preserve all details...');
           const despeckled = new Uint8Array(strokeMask);
-          for (let y = 1; y < h - 1; y++) {
-            for (let x = 1; x < w - 1; x++) {
-              const idx = y * w + x;
-              if (strokeMask[idx] === 0) continue;
-              
-              let opaqueNeighbors = 0;
-              for (let dy = -1; dy <= 1; dy++) {
-                for (let dx = -1; dx <= 1; dx++) {
-                  if (dx === 0 && dy === 0) continue;
-                  const nIdx = (y + dy) * w + (x + dx);
-                  if (strokeMask[nIdx] > 0) opaqueNeighbors++;
-                }
-              }
-              
-              if (opaqueNeighbors <= 1) {
-                despeckled[idx] = 0;
-              }
-            }
-          }
           
-          console.log('Step 4: Keep largest component for stroke mask...');
-          const cleanMask = keepLargestComponent(despeckled, w, h);
+          console.log('Step 4: SKIP component filtering to preserve all details...');
+          const cleanMask = despeckled;
           
           console.log('Step 5: Light morphological smoothing on stroke mask...');
           const smoothMask = new Uint8Array(cleanMask);
@@ -813,12 +794,12 @@ export async function addStrokeToImage(base64Image: string, strokeWidth: number 
             const origAlpha = originalAlpha[i];
             const strokeAlpha = blurredStroke[i];
             
-            if (origAlpha > 10) {
+            if (origAlpha > 3) {
               finalPixels[idx] = originalRGBA[idx];
               finalPixels[idx + 1] = originalRGBA[idx + 1];
               finalPixels[idx + 2] = originalRGBA[idx + 2];
               finalPixels[idx + 3] = origAlpha;
-            } else if (strokeAlpha > 10) {
+            } else if (strokeAlpha > 3) {
               finalPixels[idx] = r;
               finalPixels[idx + 1] = g;
               finalPixels[idx + 2] = b;

@@ -13,6 +13,6 @@ export async function getRegenerationPrompt(userPrompt: string): Promise<string>
 
 export async function getEditPrompt(userPrompt: string): Promise<string> {
   const settings = await getAdminSettings();
-  const template = settings.editPrompt || '{{USER_PROMPT}}\n\nCRITICAL: Preserve the ENTIRE sticker including all edges, borders, and details. Do NOT crop, cut off, or remove any parts of the sticker. Maintain smooth, clean edges with NO jagged pixels or rough borders. Keep the transparent background completely clean. The sticker must remain print-ready with professional quality edges suitable for die-cut printing.';
+  const template = settings.editPrompt || '{{USER_PROMPT}}\n\nCRITICAL REQUIREMENTS - DO NOT VIOLATE:\n1. PRESERVE EVERY SINGLE PIXEL of the original sticker - do not delete, crop, or remove ANY part\n2. Keep ALL fine details including hair strands, thin edges, and delicate features COMPLETELY INTACT\n3. Maintain SMOOTH, ANTI-ALIASED edges with gradual alpha transitions - NO jagged or pixelated borders\n4. Keep transparent background perfectly clean\n5. Do NOT apply any edge detection, masking, or cropping that would remove pixels\n6. Preserve the full resolution and all semi-transparent edge pixels for smooth blending\n7. The sticker must remain 100% print-ready with professional die-cut quality edges';
   return template.replace(/\{\{USER_PROMPT\}\}/g, userPrompt.trim());
 }
