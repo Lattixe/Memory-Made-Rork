@@ -1,6 +1,6 @@
 import { getAdminSettings, EditModel } from '@/app/admin';
 import { safeJsonParse } from '@/utils/json';
-import { callOpenAIImageEdit } from '@/utils/openaiImageApi';
+import { trpcClient } from '@/lib/trpc';
 
 type ImageEditRequest = {
   prompt: string;
@@ -103,12 +103,16 @@ async function callGptImageMiniApi(
   timeout: number = 60000
 ): Promise<ImageEditResponse> {
   try {
-    console.log('Using OpenAI GPT Image 1 Mini API with transparent background...');
+    console.log('Using OpenAI GPT Image 1 Mini API with transparent background via backend...');
     
-    return await callOpenAIImageEdit(base64Data, prompt, {
+    return await trpcClient.openai.editImage.mutate({
+      base64Data,
+      prompt,
       model: 'gpt-image-1-mini',
       size: '1024x1024',
       background: 'transparent',
+      content_moderation: 'low',
+      quality: 'medium',
       timeout,
     });
   } catch (error: any) {
