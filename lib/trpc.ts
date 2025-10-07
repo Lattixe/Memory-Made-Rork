@@ -3,28 +3,30 @@ import { createTRPCClient, httpLink } from "@trpc/client";
 import type { AppRouter } from "@/backend/trpc/app-router";
 import superjson from "superjson";
 import { getAuthToken } from "@/lib/authToken";
+import Constants from "expo-constants";
 
 export const trpc = createTRPCReact<AppRouter>();
 
+const DEFAULT_RORK_BASE_URL = "https://dev-m7gyp7dzka89rw149zpa5.rorktest.dev" as const;
+
 const getBaseUrl = () => {
-  if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
-    console.log('[trpc] Using EXPO_PUBLIC_RORK_API_BASE_URL:', process.env.EXPO_PUBLIC_RORK_API_BASE_URL);
-    return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+  const envUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL ?? Constants.expoConfig?.extra?.EXPO_PUBLIC_RORK_API_BASE_URL ?? Constants.manifest2?.extra?.EXPO_PUBLIC_RORK_API_BASE_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.length > 0) {
+    console.log('[trpc] Using env base URL:', envUrl);
+    return envUrl.replace(/\/$/, '');
   }
-  
+
   if (typeof window !== 'undefined' && window.location?.origin) {
     console.log('[trpc] Using window.location.origin:', window.location.origin);
-    return window.location.origin;
+    return window.location.origin.replace(/\/$/, '');
   }
-  
-  console.error('[trpc] ⚠️ CRITICAL: No base URL found!');
-  console.error('[trpc] Backend features will not work.');
-  console.error('[trpc] Please ensure EXPO_PUBLIC_RORK_API_BASE_URL is set.');
-  return '';
+
+  console.warn('[trpc] No env base URL found, falling back to default Rork tunnel URL');
+  return DEFAULT_RORK_BASE_URL;
 };
 
 const baseUrl = getBaseUrl();
-const trpcUrl = `${baseUrl}/api/trpc`;
+const trpcUrl = `${baseUrl.replace(/\/$/, '')}/api/trpc`;
 console.log('[trpc] Creating tRPC client with URL:', trpcUrl);
 
 export const trpcClient = createTRPCClient<AppRouter>({
