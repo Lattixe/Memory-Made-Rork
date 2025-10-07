@@ -12,11 +12,13 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
-import { Settings, Save, RotateCcw } from "lucide-react-native";
+import { Settings, Save, RotateCcw, Sliders } from "lucide-react-native";
 import { neutralColors as colors } from "@/constants/colors";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { StickerSettingsPanel, DEFAULT_SETTINGS as DEFAULT_STICKER_SETTINGS, StickerProcessingSettings } from "@/components/StickerSettingsPanel";
 
 const ADMIN_SETTINGS_KEY = '@admin_settings';
+const STICKER_SETTINGS_KEY = '@sticker_processing_settings';
 
 export type EditModel = 'nano-banana' | 'seedream';
 
@@ -72,15 +74,50 @@ export default function AdminSettings() {
     value: string;
   } | null>(null);
   const [selectedModel, setSelectedModel] = useState<EditModel>('nano-banana');
+  const [showStickerSettings, setShowStickerSettings] = useState<boolean>(false);
+  const [stickerSettings, setStickerSettings] = useState<StickerProcessingSettings>(DEFAULT_STICKER_SETTINGS);
 
   useEffect(() => {
     loadSettings();
+    loadStickerSettings();
   }, []);
 
   const loadSettings = async () => {
     const loaded = await getAdminSettings();
     setSettings(loaded);
     setSelectedModel(loaded.editModel || 'nano-banana');
+  };
+
+  const loadStickerSettings = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(STICKER_SETTINGS_KEY);
+      if (stored) {
+        setStickerSettings(JSON.parse(stored));
+      }
+    } catch (error) {
+      console.error('Error loading sticker settings:', error);
+    }
+  };
+
+  const saveStickerSettings = async (newSettings: StickerProcessingSettings) => {
+    try {
+      await AsyncStorage.setItem(STICKER_SETTINGS_KEY, JSON.stringify(newSettings));
+      setStickerSettings(newSettings);
+    } catch (error) {
+      console.error('Error saving sticker settings:', error);
+      Alert.alert('Error', 'Failed to save sticker settings');
+    }
+  };
+
+  const resetStickerSettings = async () => {
+    try {
+      await AsyncStorage.setItem(STICKER_SETTINGS_KEY, JSON.stringify(DEFAULT_STICKER_SETTINGS));
+      setStickerSettings(DEFAULT_STICKER_SETTINGS);
+      Alert.alert('Success', 'Sticker settings reset to defaults');
+    } catch (error) {
+      console.error('Error resetting sticker settings:', error);
+      Alert.alert('Error', 'Failed to reset sticker settings');
+    }
   };
 
   const handleSavePrompt = async (type: 'initial' | 'regeneration' | 'edit', value: string) => {
@@ -144,20 +181,31 @@ export default function AdminSettings() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Background Removal</Text>
+            <Text style={styles.sectionTitle}>Sticker Processing Settings</Text>
             <Text style={styles.helpText}>
-              Background removal is handled by 851-labs API. The output is used directly without additional post-processing.
+              Configure background removal, edge processing, compression, and other sticker generation parameters.
             </Text>
+
+            <TouchableOpacity
+              style={styles.openSettingsButton}
+              onPress={() => setShowStickerSettings(true)}
+            >
+              <Sliders size={18} color={colors.white} />
+              <Text style={styles.openSettingsButtonText}>Open Processing Settings</Text>
+            </TouchableOpacity>
 
             <View style={styles.infoBox}>
               <Text style={styles.infoText}>
-                ✓ 851-labs background removal enabled
+                Current: {stickerSettings.skipBackgroundRemoval ? '❌' : '✓'} Background Removal
               </Text>
               <Text style={styles.infoText}>
-                ✓ Auto-crop enabled
+                Current: {stickerSettings.enableAutoCrop ? '✓' : '❌'} Auto-crop
               </Text>
               <Text style={styles.infoText}>
-                ✓ No post-processing applied
+                Current: {stickerSettings.addStroke ? '✓' : '❌'} Add Stroke
+              </Text>
+              <Text style={styles.infoText}>
+                Current: Alpha Threshold {stickerSettings.alphaThreshold}, Fringe Erode {stickerSettings.fringeErode}
               </Text>
             </View>
           </View>
@@ -426,6 +474,14 @@ export default function AdminSettings() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <StickerSettingsPanel
+        visible={showStickerSettings}
+        onClose={() => setShowStickerSettings(false)}
+        settings={stickerSettings}
+        onSettingsChange={saveStickerSettings}
+        onResetToDefaults={resetStickerSettings}
+      />
     </View>
   );
 }
@@ -626,5 +682,22 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 16,
     fontWeight: 'bold' as const,
+  },
+  openSettingsButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  openSettingsButtonText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: '600' as const,
   },
 });
