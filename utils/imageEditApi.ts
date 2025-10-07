@@ -1,5 +1,6 @@
 import { getAdminSettings, EditModel } from '@/app/admin';
 import { safeJsonParse } from '@/utils/json';
+import { callOpenAIImageEdit } from '@/utils/openaiImageApi';
 
 type ImageEditRequest = {
   prompt: string;
@@ -7,15 +8,6 @@ type ImageEditRequest = {
 };
 
 type ImageEditResponse = {
-  image: { base64Data: string; mimeType: string };
-};
-
-type GptImageRequest = {
-  prompt: string;
-  images: Array<{ type: 'image'; image: string }>;
-};
-
-type GptImageResponse = {
   image: { base64Data: string; mimeType: string };
 };
 
@@ -28,10 +20,10 @@ type SeeDreamRequest = {
 };
 
 type SeeDreamResponse = {
-  images: Array<{
+  images: {
     url: string;
     content_type: string;
-  }>;
+  }[];
 };
 
 async function callNanoBananaApi(
@@ -108,70 +100,19 @@ async function callNanoBananaApi(
 async function callGptImageMiniApi(
   base64Data: string,
   prompt: string,
-  timeout: number = 4000
+  timeout: number = 60000
 ): Promise<ImageEditResponse> {
-  const requestBody: GptImageRequest = {
-    prompt,
-    images: [{ type: 'image', image: base64Data }],
-  };
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-
   try {
-    console.log('Calling GPT Image 1 Mini API...');
+    console.log('Using OpenAI GPT Image 1 Mini API with transparent background...');
     
-    const response = await fetch('https://toolkit.rork.com/images/edit/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-      signal: controller.signal,
+    return await callOpenAIImageEdit(base64Data, prompt, {
+      model: 'gpt-image-1-mini',
+      size: '1024x1024',
+      background: 'transparent',
+      timeout,
     });
-
-    clearTimeout(timeoutId);
-
-    if (response.status >= 502 && response.status <= 504) {
-      throw new Error(`Server temporarily unavailable (${response.status})`);
-    }
-    
-    if (response.status === 429) {
-      throw new Error('Rate limited');
-    }
-
-    if (!response.ok) {
-      throw new Error(`API Error ${response.status}`);
-    }
-
-    const responseText = await response.text();
-    
-    if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
-      throw new Error('Received error page');
-    }
-    
-    const jsonResult = safeJsonParse<GptImageResponse>(responseText);
-    
-    if (!jsonResult.success) {
-      throw new Error('Invalid response format');
-    }
-    
-    const data = jsonResult.data!;
-    
-    if (!data?.image?.base64Data) {
-      throw new Error('Incomplete response');
-    }
-    
-    console.log('GPT Image 1 Mini API call successful');
-    return data;
   } catch (error: any) {
-    clearTimeout(timeoutId);
-    
-    if (error.name === 'AbortError') {
-      throw new Error('Request timed out');
-    }
-    
+    console.error('GPT Image 1 Mini API error:', error.message);
     throw error;
   }
 }
