@@ -21,7 +21,7 @@ app.use("*", cors());
 app.use(
   "/trpc/*",
   async (c, next) => {
-    const timeoutMs = 25000;
+    const timeoutMs = 150000;
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('Request timeout')), timeoutMs);
     });
@@ -30,9 +30,10 @@ app.use(
       await Promise.race([next(), timeoutPromise]);
     } catch (error: any) {
       if (error.message === 'Request timeout') {
-        console.error('[backend] Request timeout after', timeoutMs, 'ms');
+        console.error('[backend] ⏱️ Request timeout after', timeoutMs, 'ms');
         return c.json({ error: 'Request timeout' }, 504);
       }
+      console.error('[backend] ❌ Middleware error:', error);
       throw error;
     }
   },
@@ -41,7 +42,7 @@ app.use(
     router: appRouter,
     createContext,
     onError: ({ error, path }) => {
-      console.error('[backend] tRPC error on path:', path);
+      console.error('[backend] ❌ tRPC error on path:', path);
       console.error('[backend] tRPC error:', error);
       console.error('[backend] tRPC error stack:', error.stack);
     },
@@ -146,6 +147,17 @@ app.get("/test-replicate", (c) => {
   });
 });
 
+// Test endpoint to verify OpenAI API key
+app.get("/test-openai", (c) => {
+  const apiKey = process.env.OPENAI_API_KEY;
+  console.log('[backend] OpenAI API key check:', apiKey ? `Key present (${apiKey.substring(0, 8)}...)` : 'Key missing');
+  return c.json({ 
+    status: apiKey ? "configured" : "missing",
+    message: apiKey ? "OpenAI API key is configured" : "OPENAI_API_KEY environment variable is not set",
+    keyPrefix: apiKey ? apiKey.substring(0, 8) : null
+  });
+});
+
 // Simple health check endpoint
 app.get("/", (c) => {
   console.log('[backend] Health check endpoint hit');
@@ -164,7 +176,12 @@ app.get("/debug", (c) => {
       trpc: "/api/trpc",
       debug: "/api/debug",
       rmbg: "/api/rmbg",
-      testReplicate: "/api/test-replicate"
+      testReplicate: "/api/test-replicate",
+      testOpenai: "/api/test-openai"
+    },
+    env: {
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY ? 'configured' : 'missing',
+      REPLICATE_API_TOKEN: process.env.REPLICATE_API_TOKEN ? 'configured' : 'missing'
     }
   });
 });

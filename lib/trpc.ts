@@ -17,8 +17,9 @@ const getBaseUrl = () => {
     return window.location.origin;
   }
   
-  console.error('[trpc] No base URL found. Backend features will not work.');
-  console.error('[trpc] Please ensure the app is running with the correct environment variables.');
+  console.error('[trpc] ⚠️ CRITICAL: No base URL found!');
+  console.error('[trpc] Backend features will not work.');
+  console.error('[trpc] Please ensure EXPO_PUBLIC_RORK_API_BASE_URL is set.');
   return '';
 };
 
@@ -37,14 +38,14 @@ export const trpcClient = createTRPCClient<AppRouter>({
         return token ? { authorization: `Bearer ${token}` } : {};
       },
       fetch(url, options) {
-        console.log('[trpc] Making request to:', url);
+        console.log('[trpc] 🔄 Making request to:', url);
         console.log('[trpc] Request options:', {
           method: options?.method,
           headers: options?.headers,
           body: options?.body ? 'present' : 'none'
         });
         
-        const timeoutMs = 30000;
+        const timeoutMs = 120000;
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         
@@ -56,20 +57,36 @@ export const trpcClient = createTRPCClient<AppRouter>({
         return fetch(url, fetchOptions)
           .then(response => {
             clearTimeout(timeoutId);
-            console.log('[trpc] Response status:', response.status);
+            console.log('[trpc] ✅ Response status:', response.status);
             console.log('[trpc] Response ok:', response.ok);
             if (!response.ok) {
-              console.error('[trpc] Response not ok:', response.status, response.statusText);
+              console.error('[trpc] ❌ Response not ok:', response.status, response.statusText);
             }
             return response;
           })
           .catch(error => {
             clearTimeout(timeoutId);
             if (error.name === 'AbortError') {
-              console.error('[trpc] Request timeout after', timeoutMs, 'ms');
+              console.error('[trpc] ⏱️ Request timeout after', timeoutMs, 'ms');
               throw new Error(`Request timeout after ${timeoutMs}ms`);
             }
-            console.error('[trpc] Fetch error:', error);
+            console.error('[trpc] ❌ Fetch error:', error);
+            console.error('[trpc] Error details:', {
+              name: error.name,
+              message: error.message,
+              stack: error.stack
+            });
+            
+            if (error.message === 'Failed to fetch') {
+              console.error('[trpc] 🔴 NETWORK ERROR: Cannot connect to backend');
+              console.error('[trpc] Check if:');
+              console.error('[trpc] 1. Backend server is running');
+              console.error('[trpc] 2. EXPO_PUBLIC_RORK_API_BASE_URL is correct:', process.env.EXPO_PUBLIC_RORK_API_BASE_URL);
+              console.error('[trpc] 3. CORS is properly configured');
+              console.error('[trpc] 4. Network connection is stable');
+              throw new Error('Cannot connect to backend server. Please check your connection and try again.');
+            }
+            
             throw error;
           });
       },
@@ -87,7 +104,7 @@ export const trpcReactClient = trpc.createClient({
         return token ? { authorization: `Bearer ${token}` } : {};
       },
       fetch(url, options) {
-        const timeoutMs = 30000;
+        const timeoutMs = 120000;
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         
@@ -105,6 +122,9 @@ export const trpcReactClient = trpc.createClient({
             clearTimeout(timeoutId);
             if (error.name === 'AbortError') {
               throw new Error(`Request timeout after ${timeoutMs}ms`);
+            }
+            if (error.message === 'Failed to fetch') {
+              throw new Error('Cannot connect to backend server. Please check your connection and try again.');
             }
             throw error;
           });
