@@ -16,7 +16,6 @@ import { Settings, Save, RotateCcw, Sliders } from "lucide-react-native";
 import { neutralColors as colors } from "@/constants/colors";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StickerSettingsPanel, DEFAULT_SETTINGS as DEFAULT_STICKER_SETTINGS, StickerProcessingSettings } from "@/components/StickerSettingsPanel";
-import BackendDiagnostics from "@/components/BackendDiagnostics";
 
 const ADMIN_SETTINGS_KEY = '@admin_settings';
 const STICKER_SETTINGS_KEY = '@sticker_processing_settings';
@@ -179,14 +178,6 @@ export default function AdminSettings() {
           <View style={styles.header}>
             <Settings size={24} color={colors.primary} />
             <Text style={styles.title}>Admin Settings</Text>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Backend Diagnostics</Text>
-            <Text style={styles.helpText}>
-              Test backend connectivity and API configuration.
-            </Text>
-            <BackendDiagnostics />
           </View>
 
           <View style={styles.section}>

@@ -21,7 +21,6 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { useUser } from '@/contexts/UserContext';
 import { processStickerImage } from '@/utils/backgroundRemover';
 import { getInitialGenerationPrompt, getRegenerationPrompt } from '@/utils/promptManager';
-import { callImageEditApi } from '@/utils/imageEditApi';
 
 
 type ImageEditRequest = {
@@ -115,14 +114,62 @@ export default function ReviewScreen() {
   const currentStickers = stickerVersions[currentVersionIndex] || generatedStickers;
 
   const regenerateWithRetry = async (base64Data: string, retryCount: number = 0): Promise<ImageEditResponse> => {
+    const maxRetries = 2;
+    const timeout = 60000; // 60 seconds
+    
+    const prompt = await getInitialGenerationPrompt();
+    
+    const requestBody: ImageEditRequest = {
+      prompt,
+      images: [{ type: 'image', image: base64Data }],
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
     try {
-      console.log(`Sending regeneration request to AI API (attempt ${retryCount + 1})...`);
+      console.log(`Sending regeneration request to AI API (attempt ${retryCount + 1}/${maxRetries + 1})...`);
       
-      const prompt = await getInitialGenerationPrompt();
-      
-      return await callImageEditApi(base64Data, prompt, retryCount);
+      const response = await fetch('https://toolkit.rork.com/images/edit/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        if (response.status === 504 && retryCount < maxRetries) {
+          console.log(`Regeneration timed out (504), retrying in ${(retryCount + 1) * 2} seconds...`);
+          await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 2000));
+          return regenerateWithRetry(base64Data, retryCount + 1);
+        }
+        throw new Error(`API request failed: ${response.status}`);
+      }
+
+      const data: ImageEditResponse = await response.json();
+      return data;
     } catch (error: any) {
-      console.error('Regeneration error:', error);
+      clearTimeout(timeoutId);
+      
+      if (error.name === 'AbortError') {
+        if (retryCount < maxRetries) {
+          console.log(`Regeneration timed out, retrying in ${(retryCount + 1) * 2} seconds...`);
+          await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 2000));
+          return regenerateWithRetry(base64Data, retryCount + 1);
+        }
+        throw new Error('Request timed out after multiple attempts');
+      }
+      
+      if (retryCount < maxRetries && (error.message.includes('504') || error.message.includes('timeout'))) {
+        console.log(`Regeneration error occurred, retrying in ${(retryCount + 1) * 2} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 2000));
+        return regenerateWithRetry(base64Data, retryCount + 1);
+      }
+      
       throw error;
     }
   };
@@ -156,8 +203,25 @@ export default function ReviewScreen() {
           base64Data = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
         }
 
-        const prompt = await getRegenerationPrompt(regeneratePrompt);
-        const data = await callImageEditApi(base64Data, prompt);
+        // Use the same prompt structure as initial generation for consistency
+        const requestBody: ImageEditRequest = {
+          prompt: await getRegenerationPrompt(regeneratePrompt),
+          images: [{ type: 'image', image: base64Data }],
+        };
+
+        const response = await fetch('https://toolkit.rork.com/images/edit/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (!response.ok) {
+          throw new Error(`API request failed: ${response.status}`);
+        }
+
+        const data: ImageEditResponse = await response.json();
         
         // Apply background removal and processing to custom regenerated sticker
         console.log('Applying background removal to custom regenerated sticker...');
@@ -325,8 +389,24 @@ export default function ReviewScreen() {
         });
       }
 
-      const prompt = `Edit this sticker design based on these instructions: "${editPrompt.trim()}". IMPORTANT: 1) Maintain the kiss-cut sticker format optimized for Printful printing, 2) Keep vibrant, bold colors that print well, 3) Preserve clean vector-style artwork with smooth edges, 4) Ensure transparent background (PNG format), 5) Maintain minimum 0.125 inch (3mm) bleed area, 6) Avoid fine details smaller than 0.1 inch, 7) Keep bold, clear outlines, 8) Ensure design still works at 3x3 inch minimum size, 9) Make the requested changes while keeping it visually appealing as a sticker.`;
-      const data = await callImageEditApi(base64Data, prompt);
+      const requestBody: ImageEditRequest = {
+        prompt: `Edit this sticker design based on these instructions: "${editPrompt.trim()}". IMPORTANT: 1) Maintain the kiss-cut sticker format optimized for Printful printing, 2) Keep vibrant, bold colors that print well, 3) Preserve clean vector-style artwork with smooth edges, 4) Ensure transparent background (PNG format), 5) Maintain minimum 0.125 inch (3mm) bleed area, 6) Avoid fine details smaller than 0.1 inch, 7) Keep bold, clear outlines, 8) Ensure design still works at 3x3 inch minimum size, 9) Make the requested changes while keeping it visually appealing as a sticker.`,
+        images: [{ type: 'image', image: base64Data }],
+      };
+
+      const response = await fetch('https://toolkit.rork.com/images/edit/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status}`);
+      }
+
+      const data: ImageEditResponse = await response.json();
       
       // Apply background removal and processing to edited sticker
       console.log('Applying background removal to edited sticker...');

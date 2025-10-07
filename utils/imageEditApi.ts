@@ -1,6 +1,6 @@
 import { getAdminSettings, EditModel } from '@/app/admin';
 import { safeJsonParse } from '@/utils/json';
-import { trpcClient } from '@/lib/trpc';
+import { callOpenAIImageEdit } from '@/utils/openaiImageApi';
 
 type ImageEditRequest = {
   prompt: string;
@@ -100,34 +100,19 @@ async function callNanoBananaApi(
 async function callGptImageMiniApi(
   base64Data: string,
   prompt: string,
-  timeout: number = 120000
+  timeout: number = 60000
 ): Promise<ImageEditResponse> {
   try {
-    console.log('Using OpenAI GPT Image 1 Mini API with transparent background via backend...');
-    console.log('Backend URL:', process.env.EXPO_PUBLIC_RORK_API_BASE_URL || 'Not set');
-    console.log('Timeout set to:', timeout, 'ms');
+    console.log('Using OpenAI GPT Image 1 Mini API with transparent background...');
     
-    const result = await trpcClient.openai.editImage.mutate({
-      base64Data,
-      prompt,
+    return await callOpenAIImageEdit(base64Data, prompt, {
       model: 'gpt-image-1-mini',
       size: '1024x1024',
       background: 'transparent',
-      content_moderation: 'low',
-      quality: 'medium',
       timeout,
     });
-    
-    console.log('GPT Image 1 Mini API call successful via backend');
-    return result;
   } catch (error: any) {
     console.error('GPT Image 1 Mini API error:', error.message);
-    console.error('Error details:', error);
-    
-    if (error.message?.includes('Cannot connect to backend') || error.message?.includes('Failed to fetch')) {
-      throw new Error('Cannot connect to backend server. Please check your connection and try again.');
-    }
-    
     throw error;
   }
 }
