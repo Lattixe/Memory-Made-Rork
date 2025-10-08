@@ -19,8 +19,8 @@ import { RefreshCw, Upload, ArrowRight, Sparkles, Edit3, ChevronLeft, ChevronRig
 import { neutralColors } from '@/constants/colors';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useUser } from '@/contexts/UserContext';
-import { processStickerImage } from '@/utils/backgroundRemover';
 import { getInitialGenerationPrompt, getRegenerationPrompt } from '@/utils/promptManager';
+import { callImageEditApi } from '@/utils/imageEditApi';
 
 
 type ImageEditRequest = {
@@ -114,64 +114,15 @@ export default function ReviewScreen() {
   const currentStickers = stickerVersions[currentVersionIndex] || generatedStickers;
 
   const regenerateWithRetry = async (base64Data: string, retryCount: number = 0): Promise<ImageEditResponse> => {
-    const maxRetries = 2;
-    const timeout = 60000; // 60 seconds
+    console.log('Starting regeneration with gpt-image-1-mini...');
     
     const prompt = await getInitialGenerationPrompt();
     
-    const requestBody: ImageEditRequest = {
-      prompt,
-      images: [{ type: 'image', image: base64Data }],
-    };
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-    try {
-      console.log(`Sending regeneration request to AI API (attempt ${retryCount + 1}/${maxRetries + 1})...`);
-      
-      const response = await fetch('https://toolkit.rork.com/images/edit/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        if (response.status === 504 && retryCount < maxRetries) {
-          console.log(`Regeneration timed out (504), retrying in ${(retryCount + 1) * 2} seconds...`);
-          await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 2000));
-          return regenerateWithRetry(base64Data, retryCount + 1);
-        }
-        throw new Error(`API request failed: ${response.status}`);
-      }
-
-      const data: ImageEditResponse = await response.json();
-      return data;
-    } catch (error: any) {
-      clearTimeout(timeoutId);
-      
-      if (error.name === 'AbortError') {
-        if (retryCount < maxRetries) {
-          console.log(`Regeneration timed out, retrying in ${(retryCount + 1) * 2} seconds...`);
-          await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 2000));
-          return regenerateWithRetry(base64Data, retryCount + 1);
-        }
-        throw new Error('Request timed out after multiple attempts');
-      }
-      
-      if (retryCount < maxRetries && (error.message.includes('504') || error.message.includes('timeout'))) {
-        console.log(`Regeneration error occurred, retrying in ${(retryCount + 1) * 2} seconds...`);
-        await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 2000));
-        return regenerateWithRetry(base64Data, retryCount + 1);
-      }
-      
-      throw error;
-    }
+    // Use callImageEditApi which respects the model selection from admin settings
+    const data = await callImageEditApi(base64Data, prompt, retryCount);
+    
+    console.log('Regeneration completed successfully!');
+    return data;
   };
 
   const regenerateStickers = async () => {
@@ -180,10 +131,10 @@ export default function ReviewScreen() {
 
     try {
       if (isCustom) {
-        // For custom stickers, regenerate using Gemini Flash with the original prompt
+        // For custom stickers, regenerate using gpt-image-1-mini with the original prompt
         const regeneratePrompt = originalPrompt || 'Create a high-quality kiss-cut sticker design with vibrant colors and clean edges, optimized for printing.';
         
-        // Create a simple white canvas as base image for Gemini to work with
+        // Create a simple white canvas as base image
         let base64Data: string;
         
         if (Platform.OS === 'web') {
@@ -203,29 +154,14 @@ export default function ReviewScreen() {
           base64Data = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
         }
 
-        // Use the same prompt structure as initial generation for consistency
-        const requestBody: ImageEditRequest = {
-          prompt: await getRegenerationPrompt(regeneratePrompt),
-          images: [{ type: 'image', image: base64Data }],
-        };
-
-        const response = await fetch('https://toolkit.rork.com/images/edit/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-        });
-
-        if (!response.ok) {
-          throw new Error(`API request failed: ${response.status}`);
-        }
-
-        const data: ImageEditResponse = await response.json();
+        const prompt = await getRegenerationPrompt(regeneratePrompt);
         
-        // Apply background removal and processing to custom regenerated sticker
-        console.log('Applying background removal to custom regenerated sticker...');
-        const cleanedBase64 = await processStickerImage(data.image.base64Data, false, true);
+        // Use callImageEditApi which respects the model selection from admin settings
+        const data = await callImageEditApi(base64Data, prompt);
+        
+        // Skip post-processing - gpt-image-1-mini already outputs transparent PNG
+        console.log('Using direct output from gpt-image-1-mini (no post-processing)...');
+        const cleanedBase64 = data.image.base64Data;
         const newSticker = `data:${data.image.mimeType};base64,${cleanedBase64}`;
         const updatedVersions = [...stickerVersions, newSticker];
         setStickerVersions(updatedVersions);
@@ -259,9 +195,9 @@ export default function ReviewScreen() {
 
         const data = await regenerateWithRetry(base64Data);
         
-        // Apply background removal and processing to regenerated sticker
-        console.log('Applying background removal to regenerated sticker...');
-        const cleanedBase64 = await processStickerImage(data.image.base64Data, false, false);
+        // Skip post-processing - gpt-image-1-mini already outputs transparent PNG
+        console.log('Using direct output from gpt-image-1-mini (no post-processing)...');
+        const cleanedBase64 = data.image.base64Data;
         const newSticker = `data:${data.image.mimeType};base64,${cleanedBase64}`;
         const updatedVersions = [...stickerVersions, newSticker];
         setStickerVersions(updatedVersions);
@@ -389,28 +325,14 @@ export default function ReviewScreen() {
         });
       }
 
-      const requestBody: ImageEditRequest = {
-        prompt: `Edit this sticker design based on these instructions: "${editPrompt.trim()}". IMPORTANT: 1) Maintain the kiss-cut sticker format optimized for Printful printing, 2) Keep vibrant, bold colors that print well, 3) Preserve clean vector-style artwork with smooth edges, 4) Ensure transparent background (PNG format), 5) Maintain minimum 0.125 inch (3mm) bleed area, 6) Avoid fine details smaller than 0.1 inch, 7) Keep bold, clear outlines, 8) Ensure design still works at 3x3 inch minimum size, 9) Make the requested changes while keeping it visually appealing as a sticker.`,
-        images: [{ type: 'image', image: base64Data }],
-      };
+      const prompt = `Edit this sticker design based on these instructions: "${editPrompt.trim()}". IMPORTANT: 1) Maintain the kiss-cut sticker format optimized for Printful printing, 2) Keep vibrant, bold colors that print well, 3) Preserve clean vector-style artwork with smooth edges, 4) Ensure transparent background (PNG format), 5) Maintain minimum 0.125 inch (3mm) bleed area, 6) Avoid fine details smaller than 0.1 inch, 7) Keep bold, clear outlines, 8) Ensure design still works at 3x3 inch minimum size, 9) Make the requested changes while keeping it visually appealing as a sticker.`;
 
-      const response = await fetch('https://toolkit.rork.com/images/edit/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`);
-      }
-
-      const data: ImageEditResponse = await response.json();
+      // Use callImageEditApi which respects the model selection from admin settings
+      const data = await callImageEditApi(base64Data, prompt);
       
-      // Apply background removal and processing to edited sticker
-      console.log('Applying background removal to edited sticker...');
-      const cleanedBase64 = await processStickerImage(data.image.base64Data, false, false);
+      // Skip post-processing - gpt-image-1-mini already outputs transparent PNG
+      console.log('Using direct output from gpt-image-1-mini (no post-processing)...');
+      const cleanedBase64 = data.image.base64Data;
       const newSticker = `data:${data.image.mimeType};base64,${cleanedBase64}`;
       const updatedVersions = [...stickerVersions, newSticker];
       setStickerVersions(updatedVersions);
