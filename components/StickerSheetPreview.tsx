@@ -108,20 +108,11 @@ const styles = StyleSheet.create({
   },
   stickerWrapper: {
     flex: 1,
-    backgroundColor: neutralColors.white,
-    borderRadius: 8,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: neutralColors.border,
-    shadowColor: neutralColors.gray900,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 1,
   },
   stickerImage: {
     width: '100%',
     height: '100%',
+    borderRadius: 8,
   },
   errorText: {
     fontSize: 14,
