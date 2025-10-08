@@ -35,12 +35,34 @@ export type ImageEditResponse = {
 };
 
 function resolveOpenAIKey(): string | undefined {
-  const fromEnv = (process as any)?.env?.EXPO_PUBLIC_OPENAI_API_KEY as string | undefined;
+  const envAny = ((process as any)?.env ?? {}) as Record<string, string | undefined>;
+  const fromEnv = envAny.EXPO_PUBLIC_OPENAI_API_KEY ?? envAny.EXPO_PUBLIC_OPENAI;
+
   const extra = (Constants?.expoConfig as any)?.extra ?? {};
-  const fromExtraDirect = extra?.EXPO_PUBLIC_OPENAI_API_KEY ?? extra?.OPENAI_API_KEY;
-  const fromExtraNested = extra?.openai?.apiKey ?? extra?.public?.EXPO_PUBLIC_OPENAI_API_KEY;
-  const fromWindow = Platform.OS === 'web' ? (globalThis as any)?.ENV?.EXPO_PUBLIC_OPENAI_API_KEY ?? (globalThis as any)?.EXPO_PUBLIC_OPENAI_API_KEY : undefined;
-  return fromEnv ?? fromExtraDirect ?? fromExtraNested ?? fromWindow;
+  const fromExtraDirect =
+    extra?.EXPO_PUBLIC_OPENAI_API_KEY ??
+    extra?.EXPO_PUBLIC_OPENAI ??
+    extra?.OPENAI_API_KEY;
+  const fromExtraNested =
+    extra?.openai?.apiKey ??
+    extra?.public?.EXPO_PUBLIC_OPENAI_API_KEY ??
+    extra?.public?.EXPO_PUBLIC_OPENAI;
+
+  const fromWindow = Platform.OS === 'web'
+    ? (globalThis as any)?.ENV?.EXPO_PUBLIC_OPENAI_API_KEY ??
+      (globalThis as any)?.ENV?.EXPO_PUBLIC_OPENAI ??
+      (globalThis as any)?.EXPO_PUBLIC_OPENAI_API_KEY ??
+      (globalThis as any)?.EXPO_PUBLIC_OPENAI
+    : undefined;
+
+  const key = fromEnv ?? fromExtraDirect ?? fromExtraNested ?? fromWindow;
+  if (key) {
+    try {
+      const masked = key.length > 8 ? `${key.slice(0, 4)}...${key.slice(-4)}` : '***';
+      console.log(`[openaiImageApi] OpenAI key detected (${masked}).`);
+    } catch {}
+  }
+  return key;
 }
 
 function assertApiKeyOrThrow(): string {
