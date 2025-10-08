@@ -856,14 +856,18 @@ export async function processStickerImage(
   base64Image: string,
   skipBackgroundRemoval: boolean = false,
   isAIGenerated: boolean = true,
-  addStroke: boolean = false
+  addStroke: boolean = false,
+  enableGentleCleanup: boolean = false,
+  enableAutoCrop: boolean = false
 ): Promise<string> {
   try {
-    console.log('Processing sticker image for Printful compliance...');
+    console.log('Processing sticker image...');
+    console.log(`Settings: skipBgRemoval=${skipBackgroundRemoval}, gentleCleanup=${enableGentleCleanup}, autoCrop=${enableAutoCrop}`);
 
     let processedImage = base64Image;
 
     if (!skipBackgroundRemoval) {
+      console.log('Applying background removal...');
       const timeoutPromise = new Promise<string>((resolve) => {
         setTimeout(() => {
           console.log('Background removal taking too long, using original');
@@ -872,27 +876,35 @@ export async function processStickerImage(
       });
       const removalPromise = removeBackground(base64Image, !isAIGenerated);
       processedImage = await Promise.race([removalPromise, timeoutPromise]);
+    } else {
+      console.log('Skipping background removal (disabled in settings)');
     }
 
-    if (Platform.OS === 'web') {
+    if (enableGentleCleanup && Platform.OS === 'web') {
       try {
-        console.log('Applying gentle edge cleanup for print quality...');
+        console.log('Applying gentle edge cleanup...');
         processedImage = await gentleEdgeCleanup(processedImage);
       } catch (cleanupError) {
         console.log('Edge cleanup failed, continuing without cleanup');
       }
+    } else if (!enableGentleCleanup) {
+      console.log('Skipping gentle edge cleanup (disabled in settings)');
     }
 
-    if (Platform.OS === 'web') {
+    if (enableAutoCrop && Platform.OS === 'web') {
       try {
+        console.log('Applying auto-crop...');
         const croppedImage = await autoCropImage(processedImage);
         return croppedImage;
       } catch (cropError) {
         console.log('Auto-crop failed, using uncropped image');
         return processedImage;
       }
+    } else if (!enableAutoCrop) {
+      console.log('Skipping auto-crop (disabled in settings)');
     }
 
+    console.log('Processing complete - returning image');
     return processedImage;
   } catch (error) {
     console.log('Processing error, returning original:', error);

@@ -30,7 +30,7 @@ export type StickerProcessingSettings = {
 };
 
 export const DEFAULT_SETTINGS: StickerProcessingSettings = {
-  skipBackgroundRemoval: false,
+  skipBackgroundRemoval: true,
   isAIGenerated: true,
   addStroke: false,
   strokeWidth: 3,
@@ -38,8 +38,8 @@ export const DEFAULT_SETTINGS: StickerProcessingSettings = {
   alphaThreshold: 5,
   fringeErode: 2,
   despeckleSize: 3,
-  enableGentleCleanup: true,
-  enableAutoCrop: true,
+  enableGentleCleanup: false,
+  enableAutoCrop: false,
   compressionQuality: 0.6,
   compressionMaxSize: 512,
   apiTimeout: 4000,

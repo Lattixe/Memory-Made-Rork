@@ -212,9 +212,9 @@ export default function UploadScreen() {
       
       console.log('AI processing completed successfully!');
       
-      // Apply aggressive background removal for AI-generated stickers
-      console.log('Applying enhanced background removal and auto-cropping...');
-      const cleanedBase64 = await processStickerImage(data.image.base64Data, false, true);
+      // Skip post-processing - gpt-image-1-mini already outputs transparent PNG
+      console.log('Using direct output from gpt-image-1-mini (no post-processing)...');
+      const cleanedBase64 = data.image.base64Data;
       
       return {
         image: {
@@ -267,9 +267,9 @@ export default function UploadScreen() {
 
       console.log('AI generation completed successfully!');
       
-      // Apply aggressive background removal for AI-generated stickers
-      console.log('Applying enhanced background removal and auto-cropping...');
-      const cleanedBase64 = await processStickerImage(data.image.base64Data, false, true);
+      // Skip post-processing - gpt-image-1-mini already outputs transparent PNG
+      console.log('Using direct output from gpt-image-1-mini (no post-processing)...');
+      const cleanedBase64 = data.image.base64Data;
       
       const generatedImageUri = `data:${data.image.mimeType};base64,${cleanedBase64}`;
       
