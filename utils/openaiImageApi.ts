@@ -37,18 +37,24 @@ export type ImageEditResponse = {
 };
 
 function resolveOpenAIKey(): string | undefined {
+  console.log('[openaiImageApi] Attempting to resolve OpenAI API key...');
+  
   const envAny = ((process as any)?.env ?? {}) as Record<string, string | undefined>;
   const fromEnv = envAny.EXPO_PUBLIC_OPENAI_API_KEY ?? envAny.EXPO_PUBLIC_OPENAI;
+  console.log('[openaiImageApi] fromEnv:', fromEnv ? 'found' : 'not found');
 
   const extra = (Constants?.expoConfig as any)?.extra ?? {};
   const fromExtraDirect =
     extra?.EXPO_PUBLIC_OPENAI_API_KEY ??
     extra?.EXPO_PUBLIC_OPENAI ??
     extra?.OPENAI_API_KEY;
+  console.log('[openaiImageApi] fromExtraDirect:', fromExtraDirect ? 'found' : 'not found');
+  
   const fromExtraNested =
     extra?.openai?.apiKey ??
     extra?.public?.EXPO_PUBLIC_OPENAI_API_KEY ??
     extra?.public?.EXPO_PUBLIC_OPENAI;
+  console.log('[openaiImageApi] fromExtraNested:', fromExtraNested ? 'found' : 'not found');
 
   const fromWindow = Platform.OS === 'web'
     ? (globalThis as any)?.ENV?.EXPO_PUBLIC_OPENAI_API_KEY ??
@@ -56,6 +62,7 @@ function resolveOpenAIKey(): string | undefined {
       (globalThis as any)?.EXPO_PUBLIC_OPENAI_API_KEY ??
       (globalThis as any)?.EXPO_PUBLIC_OPENAI
     : undefined;
+  console.log('[openaiImageApi] fromWindow:', fromWindow ? 'found' : 'not found');
 
   const key = fromEnv ?? fromExtraDirect ?? fromExtraNested ?? fromWindow;
   if (key) {
@@ -63,6 +70,10 @@ function resolveOpenAIKey(): string | undefined {
       const masked = key.length > 8 ? `${key.slice(0, 4)}...${key.slice(-4)}` : '***';
       console.log(`[openaiImageApi] OpenAI key detected (${masked}).`);
     } catch {}
+  } else {
+    console.log('[openaiImageApi] No OpenAI key found in any location');
+    console.log('[openaiImageApi] Available extra keys:', Object.keys(extra));
+    console.log('[openaiImageApi] Available env keys:', Object.keys(envAny).filter(k => k.includes('OPENAI')));
   }
   return key;
 }
