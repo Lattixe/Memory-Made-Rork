@@ -78,7 +78,7 @@ export default function StickerSheetPreview({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    width: '100%',
   },
   sheetBorder: {
     backgroundColor: neutralColors.white,
@@ -112,7 +112,6 @@ const styles = StyleSheet.create({
   stickerImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 8,
   },
   errorText: {
     fontSize: 14,
