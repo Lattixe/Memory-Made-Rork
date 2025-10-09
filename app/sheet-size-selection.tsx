@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ScrollView,
   Platform,
   Dimensions,
+  Image as RNImage,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Grid3X3 } from 'lucide-react-native';
@@ -22,6 +23,8 @@ import {
 } from '@/utils/dynamicStickerLayout';
 import { router, useLocalSearchParams } from 'expo-router';
 import StickerSheetPreview from '@/components/StickerSheetPreview';
+import { captureRef } from 'react-native-view-shot';
+import * as FileSystem from 'expo-file-system';
 
 type SheetSize = '3x3' | '4x4' | '5.5x5.5';
 
@@ -86,12 +89,21 @@ export default function SheetSizeSelectionScreen() {
   const [selectedSize, setSelectedSize] = useState<SheetSize>('4x4');
   const [selectedStickerCount, setSelectedStickerCount] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [generationProgress, setGenerationProgress] = useState<string>('');
   const [dynamicLayouts, setDynamicLayouts] = useState<Record<SheetSize, DynamicSheetLayout | null>>({
     '3x3': null,
     '4x4': null,
     '5.5x5.5': null,
   });
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(true);
+  const [renderingCanvas, setRenderingCanvas] = useState<{
+    layout: any;
+    cols: number;
+    rows: number;
+    stickerCount: number;
+    stickerImageUri: string;
+  } | null>(null);
+  const sheetCanvasRef = useRef<View>(null);
 
   useEffect(() => {
     async function analyzeStickerDimensions() {
@@ -118,6 +130,15 @@ export default function SheetSizeSelectionScreen() {
         
         console.log('[Dynamic Layout] Validated layouts:', validatedLayouts);
         setDynamicLayouts(validatedLayouts);
+        
+        if (Platform.OS !== 'web') {
+          console.log('[Image Preload] Preloading sticker image for faster generation...');
+          RNImage.prefetch(stickerImage).then(() => {
+            console.log('[Image Preload] Image preloaded successfully');
+          }).catch(err => {
+            console.warn('[Image Preload] Failed to preload:', err);
+          });
+        }
       } catch (error) {
         console.error('[Dynamic Layout] Error analyzing sticker:', error);
       } finally {
@@ -139,6 +160,7 @@ export default function SheetSizeSelectionScreen() {
     }
 
     setIsGenerating(true);
+    setGenerationProgress('Preparing...');
 
     try {
       const selectedConfig = SHEET_CONFIGS.find(c => c.size === selectedSize);
@@ -161,6 +183,7 @@ export default function SheetSizeSelectionScreen() {
           dimensions: `${dynamicOption.stickerWidthInches.toFixed(2)}"×${dynamicOption.stickerHeightInches.toFixed(2)}"`,
         });
 
+        setGenerationProgress('Generating layout...');
         sheetImageBase64 = await generateDynamicStickerSheet(
           stickerImage,
           selectedSize,
@@ -178,14 +201,19 @@ export default function SheetSizeSelectionScreen() {
           grid: stickerOption.grid,
         });
 
+        setGenerationProgress('Generating sheet...');
+        const startTime = Date.now();
         sheetImageBase64 = await generateRepeatedStickerSheet(
           stickerImage,
           selectedSize,
           currentStickerCount,
           stickerOption.grid
         );
+        const duration = Date.now() - startTime;
+        console.log(`[Sheet Generation] Completed in ${duration}ms`);
       }
 
+      setGenerationProgress('Finalizing...');
       console.log('[Sheet Generation] Sheet generated, navigating to checkout');
 
       router.push({
@@ -205,6 +233,7 @@ export default function SheetSizeSelectionScreen() {
       Alert.alert('Error', 'Failed to generate sticker sheet. Please try again.');
     } finally {
       setIsGenerating(false);
+      setGenerationProgress('');
     }
   };
 
@@ -218,77 +247,146 @@ export default function SheetSizeSelectionScreen() {
     const [cols, rows] = grid;
 
     if (Platform.OS === 'web') {
-      return new Promise((resolve, reject) => {
-        const canvas = document.createElement('canvas');
-        canvas.width = layout.sheetSizePixels;
-        canvas.height = layout.sheetSizePixels;
-        const ctx = canvas.getContext('2d');
-        
-        if (!ctx) {
-          reject(new Error('Could not get canvas context'));
+      return generateWebStickerSheet(stickerImageUri, layout, cols, rows, stickerCount);
+    } else {
+      return generateMobileStickerSheet(stickerImageUri, layout, cols, rows, stickerCount);
+    }
+  };
+
+  const generateWebStickerSheet = async (
+    stickerImageUri: string,
+    layout: any,
+    cols: number,
+    rows: number,
+    stickerCount: number
+  ): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = layout.sheetSizePixels;
+      canvas.height = layout.sheetSizePixels;
+      const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: false });
+      
+      if (!ctx) {
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+
+      ctx.fillStyle = '#f8f9fa';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(
+        SHEET_CONSTANTS.OUTER_MARGIN_PIXELS,
+        SHEET_CONSTANTS.OUTER_MARGIN_PIXELS,
+        layout.sheetSizePixels - 2 * SHEET_CONSTANTS.OUTER_MARGIN_PIXELS,
+        layout.sheetSizePixels - 2 * SHEET_CONSTANTS.OUTER_MARGIN_PIXELS
+      );
+
+      const img = new (window as any).Image();
+      img.crossOrigin = 'anonymous';
+      
+      img.onload = () => {
+        const stickerOption = layout.options.find((opt: any) => opt.count === stickerCount);
+        if (!stickerOption) {
+          reject(new Error('Invalid sticker count'));
           return;
         }
 
-        // Fill background
-        ctx.fillStyle = '#f8f9fa';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Draw printable area
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(
-          SHEET_CONSTANTS.OUTER_MARGIN_PIXELS,
-          SHEET_CONSTANTS.OUTER_MARGIN_PIXELS,
-          layout.sheetSizePixels - 2 * SHEET_CONSTANTS.OUTER_MARGIN_PIXELS,
-          layout.sheetSizePixels - 2 * SHEET_CONSTANTS.OUTER_MARGIN_PIXELS
-        );
+        const stickerSizePixels = stickerOption.stickerSizePixels;
+        const gutterPixels = SHEET_CONSTANTS.GUTTER_PIXELS;
+        const marginPixels = SHEET_CONSTANTS.OUTER_MARGIN_PIXELS;
 
-        const img = new (window as any).Image();
-        img.crossOrigin = 'anonymous';
+        const totalGridWidth = cols * stickerSizePixels + (cols - 1) * gutterPixels;
+        const totalGridHeight = rows * stickerSizePixels + (rows - 1) * gutterPixels;
+        const usableWidth = layout.sheetSizePixels - 2 * marginPixels;
+        const usableHeight = layout.sheetSizePixels - 2 * marginPixels;
         
-        img.onload = () => {
-          const stickerOption = layout.options.find(opt => opt.count === stickerCount);
-          if (!stickerOption) {
-            reject(new Error('Invalid sticker count'));
+        const startX = marginPixels + Math.max(0, (usableWidth - totalGridWidth) / 2);
+        const startY = marginPixels + Math.max(0, (usableHeight - totalGridHeight) / 2);
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
+        let drawn = 0;
+        for (let row = 0; row < rows && drawn < stickerCount; row++) {
+          for (let col = 0; col < cols && drawn < stickerCount; col++) {
+            const x = startX + col * (stickerSizePixels + gutterPixels);
+            const y = startY + row * (stickerSizePixels + gutterPixels);
+            
+            ctx.drawImage(img, x, y, stickerSizePixels, stickerSizePixels);
+            drawn++;
+          }
+        }
+        
+        resolve(canvas.toDataURL('image/png', 0.95));
+      };
+      
+      img.onerror = () => {
+        reject(new Error('Failed to load sticker image'));
+      };
+      
+      img.src = stickerImageUri;
+    });
+  };
+
+  const generateMobileStickerSheet = async (
+    stickerImageUri: string,
+    layout: any,
+    cols: number,
+    rows: number,
+    stickerCount: number
+  ): Promise<string> => {
+    console.log('[Mobile Sheet] Starting generation...');
+    
+    return new Promise((resolve, reject) => {
+      const stickerOption = layout.options.find((opt: any) => opt.count === stickerCount);
+      if (!stickerOption) {
+        reject(new Error('Invalid sticker count'));
+        return;
+      }
+
+      setRenderingCanvas({
+        layout,
+        cols,
+        rows,
+        stickerCount,
+        stickerImageUri,
+      });
+
+      setTimeout(async () => {
+        try {
+          if (!sheetCanvasRef.current) {
+            setRenderingCanvas(null);
+            reject(new Error('Canvas ref not available'));
             return;
           }
 
-          const stickerSizePixels = stickerOption.stickerSizePixels;
-          const gutterPixels = SHEET_CONSTANTS.GUTTER_PIXELS;
-          const marginPixels = SHEET_CONSTANTS.OUTER_MARGIN_PIXELS;
+          console.log('[Mobile Sheet] Waiting for images to load...');
+          await new Promise(r => setTimeout(r, 500));
 
-          const totalGridWidth = cols * stickerSizePixels + (cols - 1) * gutterPixels;
-          const totalGridHeight = rows * stickerSizePixels + (rows - 1) * gutterPixels;
-          const usableWidth = layout.sheetSizePixels - 2 * marginPixels;
-          const usableHeight = layout.sheetSizePixels - 2 * marginPixels;
-          
-          const startX = marginPixels + Math.max(0, (usableWidth - totalGridWidth) / 2);
-          const startY = marginPixels + Math.max(0, (usableHeight - totalGridHeight) / 2);
+          console.log('[Mobile Sheet] Capturing view...');
+          const uri = await captureRef(sheetCanvasRef.current, {
+            format: 'png',
+            quality: 0.95,
+            width: layout.sheetSizePixels,
+            height: layout.sheetSizePixels,
+          });
 
-          let drawn = 0;
-          for (let row = 0; row < rows && drawn < stickerCount; row++) {
-            for (let col = 0; col < cols && drawn < stickerCount; col++) {
-              const x = startX + col * (stickerSizePixels + gutterPixels);
-              const y = startY + row * (stickerSizePixels + gutterPixels);
-              
-              ctx.drawImage(img, x, y, stickerSizePixels, stickerSizePixels);
-              drawn++;
-            }
-          }
-          
-          resolve(canvas.toDataURL('image/png'));
-        };
-        
-        img.onerror = () => {
-          reject(new Error('Failed to load sticker image'));
-        };
-        
-        img.src = stickerImageUri;
-      });
-    } else {
-      // For mobile, we'll need to use a different approach
-      // For now, return the original image and handle it in checkout
-      return stickerImageUri;
-    }
+          console.log('[Mobile Sheet] Reading file...');
+          const base64 = await FileSystem.readAsStringAsync(uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+
+          setRenderingCanvas(null);
+          console.log('[Mobile Sheet] Generation complete');
+          resolve(`data:image/png;base64,${base64}`);
+        } catch (error) {
+          console.error('[Mobile Sheet] Error:', error);
+          setRenderingCanvas(null);
+          reject(error);
+        }
+      }, 100);
+    });
   };
 
   const screenWidth = Dimensions.get('window').width;
@@ -465,7 +563,9 @@ export default function SheetSizeSelectionScreen() {
             {isGenerating ? (
               <View style={styles.buttonContent}>
                 <ActivityIndicator size="small" color={neutralColors.white} />
-                <Text style={styles.generateButtonText}>Preparing...</Text>
+                <Text style={styles.generateButtonText}>
+                  {generationProgress || 'Preparing...'}
+                </Text>
               </View>
             ) : (
               <View style={styles.buttonContent}>
@@ -478,6 +578,72 @@ export default function SheetSizeSelectionScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {renderingCanvas && (
+        <View
+          style={{
+            width: renderingCanvas.layout.sheetSizePixels,
+            height: renderingCanvas.layout.sheetSizePixels,
+            backgroundColor: '#f8f9fa',
+            position: 'absolute',
+            left: -10000,
+            top: 0,
+          }}
+          collapsable={false}
+          ref={sheetCanvasRef}
+        >
+          <View
+            style={{
+              position: 'absolute',
+              left: SHEET_CONSTANTS.OUTER_MARGIN_PIXELS,
+              top: SHEET_CONSTANTS.OUTER_MARGIN_PIXELS,
+              width: renderingCanvas.layout.sheetSizePixels - 2 * SHEET_CONSTANTS.OUTER_MARGIN_PIXELS,
+              height: renderingCanvas.layout.sheetSizePixels - 2 * SHEET_CONSTANTS.OUTER_MARGIN_PIXELS,
+              backgroundColor: '#ffffff',
+            }}
+          />
+          {(() => {
+            const stickerOption = renderingCanvas.layout.options.find((opt: any) => opt.count === renderingCanvas.stickerCount);
+            if (!stickerOption) return null;
+
+            const stickerSizePixels = stickerOption.stickerSizePixels;
+            const gutterPixels = SHEET_CONSTANTS.GUTTER_PIXELS;
+            const marginPixels = SHEET_CONSTANTS.OUTER_MARGIN_PIXELS;
+
+            const totalGridWidth = renderingCanvas.cols * stickerSizePixels + (renderingCanvas.cols - 1) * gutterPixels;
+            const totalGridHeight = renderingCanvas.rows * stickerSizePixels + (renderingCanvas.rows - 1) * gutterPixels;
+            const usableWidth = renderingCanvas.layout.sheetSizePixels - 2 * marginPixels;
+            const usableHeight = renderingCanvas.layout.sheetSizePixels - 2 * marginPixels;
+            
+            const startX = marginPixels + Math.max(0, (usableWidth - totalGridWidth) / 2);
+            const startY = marginPixels + Math.max(0, (usableHeight - totalGridHeight) / 2);
+
+            return Array.from({ length: renderingCanvas.rows }).map((_, row) =>
+              Array.from({ length: renderingCanvas.cols }).map((_, col) => {
+                const index = row * renderingCanvas.cols + col;
+                if (index >= renderingCanvas.stickerCount) return null;
+                
+                const x = startX + col * (stickerSizePixels + gutterPixels);
+                const y = startY + row * (stickerSizePixels + gutterPixels);
+                
+                return (
+                  <RNImage
+                    key={`${row}-${col}`}
+                    source={{ uri: renderingCanvas.stickerImageUri }}
+                    style={{
+                      position: 'absolute',
+                      left: x,
+                      top: y,
+                      width: stickerSizePixels,
+                      height: stickerSizePixels,
+                    }}
+                  />
+                );
+              })
+            );
+          })()}
+        </View>
+      )}
     </View>
   );
 }
