@@ -50,7 +50,16 @@ export interface UserContextType {
 
 const USER_STORAGE_KEY = '@user_data';
 const STICKERS_STORAGE_KEY = '@saved_stickers';
-const STICKERS_DIR = FileSystem.documentDirectory ? `${FileSystem.documentDirectory}stickers/` : '';
+const getStickersDir = () => {
+  if (Platform.OS === 'web') return '';
+  try {
+    const docDir = (FileSystem as any).documentDirectory;
+    return docDir ? `${docDir}stickers/` : '';
+  } catch {
+    return '';
+  }
+};
+const STICKERS_DIR = getStickersDir();
 
 const ensureStickersDirectory = async () => {
   if (Platform.OS === 'web') return;
@@ -68,7 +77,7 @@ const saveImageToFile = async (base64Data: string, filename: string): Promise<st
   await ensureStickersDirectory();
   const filePath = `${STICKERS_DIR}${filename}`;
   await FileSystem.writeAsStringAsync(filePath, base64Data, {
-    encoding: FileSystem.EncodingType.Base64,
+    encoding: 'base64' as any,
   });
   return filePath;
 };
@@ -83,7 +92,7 @@ const readImageFromFile = async (filePath: string): Promise<string> => {
       return `data:image/png;base64,${base64}`;
     }
     const base64 = await FileSystem.readAsStringAsync(filePath, {
-      encoding: FileSystem.EncodingType.Base64,
+      encoding: 'base64' as any,
     });
     return `data:image/png;base64,${base64}`;
   } catch (error) {

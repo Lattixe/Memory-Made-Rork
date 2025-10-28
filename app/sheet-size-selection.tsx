@@ -374,7 +374,7 @@ export default function SheetSizeSelectionScreen() {
 
           console.log('[Mobile Sheet] Reading file...');
           const base64 = await FileSystem.readAsStringAsync(uri, {
-            encoding: FileSystem.EncodingType.Base64,
+            encoding: 'base64' as any,
           });
 
           setRenderingCanvas(null);

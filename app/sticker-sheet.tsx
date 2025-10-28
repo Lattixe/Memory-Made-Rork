@@ -659,7 +659,7 @@ const StickerSheetScreen = memo(() => {
       });
 
       const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: 'base64' as any,
       });
 
       return `data:image/png;base64,${base64}`;
