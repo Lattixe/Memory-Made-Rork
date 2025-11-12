@@ -170,8 +170,10 @@ export async function callOpenAIImageGenerate(
     let base64Data: string;
 
     if (imageData.b64_json) {
+      console.log('[openaiImageApi] Using b64_json from response, size:', imageData.b64_json.length);
       base64Data = imageData.b64_json;
     } else if (imageData.url) {
+      console.log('[openaiImageApi] Fetching image from URL:', imageData.url);
       const imageResponse = await fetch(imageData.url);
       if (!imageResponse.ok) {
         throw new Error('Failed to fetch generated image from URL');
@@ -193,7 +195,12 @@ export async function callOpenAIImageGenerate(
       throw new Error('No image data in OpenAI response');
     }
 
-    console.log('OpenAI image generation successful');
+    if (!base64Data || base64Data.length === 0) {
+      console.error('[openaiImageApi] Empty base64 data received');
+      throw new Error('Empty image data received from OpenAI');
+    }
+
+    console.log('[openaiImageApi] Image generation successful, data size:', base64Data.length);
     return {
       image: {
         base64Data,
@@ -308,8 +315,10 @@ export async function callOpenAIImageEdit(
     let resultBase64: string;
 
     if (imageData.b64_json) {
+      console.log('[openaiImageApi] Using b64_json from edit response, size:', imageData.b64_json.length);
       resultBase64 = imageData.b64_json;
     } else if (imageData.url) {
+      console.log('[openaiImageApi] Fetching edited image from URL:', imageData.url);
       const imageResponse = await fetch(imageData.url);
       if (!imageResponse.ok) {
         throw new Error('Failed to fetch edited image from URL');
@@ -331,7 +340,12 @@ export async function callOpenAIImageEdit(
       throw new Error('No image data in OpenAI response');
     }
 
-    console.log('OpenAI image edit successful');
+    if (!resultBase64 || resultBase64.length === 0) {
+      console.error('[openaiImageApi] Empty base64 data received from edit');
+      throw new Error('Empty image data received from OpenAI edit');
+    }
+
+    console.log('[openaiImageApi] Image edit successful, data size:', resultBase64.length);
     return {
       image: {
         base64Data: resultBase64,
