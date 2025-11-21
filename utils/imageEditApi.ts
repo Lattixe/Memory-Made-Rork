@@ -1,6 +1,6 @@
 import { getAdminSettings, EditModel } from '@/app/admin';
 import { safeJsonParse } from '@/utils/json';
-import { callOpenAIImageEdit } from '@/utils/openaiImageApi';
+import { callOpenAIImageEdit, callOpenAIImageGenerate } from '@/utils/openaiImageApi';
 
 type ImageEditRequest = {
   prompt: string;
@@ -201,6 +201,51 @@ async function callSeeDreamApi(
     
     if (error.name === 'AbortError') {
       throw new Error('SeeDream request timed out');
+    }
+    
+    throw error;
+  }
+}
+
+async function callGptImageMiniGenerateApi(
+  prompt: string,
+  timeout: number = 60000
+): Promise<ImageEditResponse> {
+  try {
+    console.log('Using OpenAI GPT Image 1 Mini API for generation with transparent background...');
+    
+    return await callOpenAIImageGenerate(prompt, {
+      model: 'gpt-image-1-mini',
+      size: '1024x1024',
+      background: 'transparent',
+      timeout,
+    });
+  } catch (error: any) {
+    console.error('GPT Image 1 Mini Generate API error:', error.message);
+    throw error;
+  }
+}
+
+export async function callImageGenerateApi(
+  prompt: string,
+  retryCount: number = 0
+): Promise<ImageEditResponse> {
+  const settings = await getAdminSettings();
+  const model: EditModel = settings.editModel || 'gpt-image-1-mini';
+  
+  console.log(`Using model for generation: ${model}`);
+  
+  try {
+    // For now, we only support gpt-image-1-mini for generation as it's the only one with a generation endpoint
+    // If we add other models, we can switch here
+    return await callGptImageMiniGenerateApi(prompt);
+  } catch (error: any) {
+    console.error(`Generation API error:`, error.message);
+    
+    if (retryCount < 1) {
+      console.log(`Retrying generation...`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return callImageGenerateApi(prompt, retryCount + 1);
     }
     
     throw error;

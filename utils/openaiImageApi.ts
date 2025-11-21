@@ -39,6 +39,12 @@ export type ImageEditResponse = {
 function resolveOpenAIKey(): string | undefined {
   console.log('[openaiImageApi] Attempting to resolve OpenAI API key...');
   
+  // Direct check for EXPO_PUBLIC_OPENAI_API_KEY in process.env (most reliable in Expo)
+  if (process.env.EXPO_PUBLIC_OPENAI_API_KEY) {
+    console.log('[openaiImageApi] Found EXPO_PUBLIC_OPENAI_API_KEY in process.env');
+    return process.env.EXPO_PUBLIC_OPENAI_API_KEY;
+  }
+
   const envAny = ((process as any)?.env ?? {}) as Record<string, string | undefined>;
   const fromEnv = envAny.EXPO_PUBLIC_OPENAI_API_KEY ?? envAny.EXPO_PUBLIC_OPENAI;
   console.log('[openaiImageApi] fromEnv:', fromEnv ? 'found' : 'not found');
