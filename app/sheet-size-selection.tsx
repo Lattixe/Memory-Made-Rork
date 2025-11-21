@@ -104,14 +104,55 @@ export default function SheetSizeSelectionScreen() {
     stickerImageUri: string;
   } | null>(null);
   const sheetCanvasRef = useRef<View>(null);
+  const [optimizedStickerImage, setOptimizedStickerImage] = useState<string>(stickerImage);
+
+  // Optimization: Save base64 image to temp file for better performance
+  useEffect(() => {
+    let isActive = true;
+    const optimizeImage = async () => {
+      if (Platform.OS !== 'web' && stickerImage && stickerImage.startsWith('data:')) {
+        try {
+          console.log('[Image Optimization] Saving base64 to temp file...');
+          const base64Data = stickerImage.split(',')[1];
+          const filename = `temp_sticker_${Date.now()}.png`;
+          const filepath = `${FileSystem.cacheDirectory}${filename}`;
+          
+          await FileSystem.writeAsStringAsync(filepath, base64Data, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          
+          if (isActive) {
+            console.log('[Image Optimization] Image saved to:', filepath);
+            setOptimizedStickerImage(filepath);
+            
+            // Preload the file URI
+            await RNImage.prefetch(filepath);
+          }
+        } catch (error) {
+          console.error('[Image Optimization] Failed to save temp file:', error);
+          // Fallback to original if optimization fails
+          if (isActive) setOptimizedStickerImage(stickerImage);
+        }
+      } else {
+        if (isActive) setOptimizedStickerImage(stickerImage);
+      }
+    };
+
+    optimizeImage();
+
+    return () => {
+      isActive = false;
+    };
+  }, [stickerImage]);
 
   useEffect(() => {
     async function analyzeStickerDimensions() {
-      if (!stickerImage) return;
+      if (!optimizedStickerImage) return;
       
       try {
         console.log('[Dynamic Layout] Analyzing sticker dimensions...');
-        const dimensions = await getStickerDimensions(stickerImage);
+        // Use optimized image for analysis too
+        const dimensions = await getStickerDimensions(optimizedStickerImage);
         console.log('[Dynamic Layout] Sticker dimensions:', dimensions);
         
         const layouts: Record<SheetSize, DynamicSheetLayout | null> = {
@@ -131,7 +172,7 @@ export default function SheetSizeSelectionScreen() {
         console.log('[Dynamic Layout] Validated layouts:', validatedLayouts);
         setDynamicLayouts(validatedLayouts);
         
-        if (Platform.OS !== 'web') {
+        if (Platform.OS !== 'web' && !optimizedStickerImage.startsWith('file:')) {
           console.log('[Image Preload] Preloading sticker image for faster generation...');
           RNImage.prefetch(stickerImage).then(() => {
             console.log('[Image Preload] Image preloaded successfully');
@@ -147,14 +188,14 @@ export default function SheetSizeSelectionScreen() {
     }
     
     analyzeStickerDimensions();
-  }, [stickerImage]);
+  }, [optimizedStickerImage, stickerImage]);
 
   const currentDynamicLayout = dynamicLayouts[selectedSize];
   const currentLayout = STICKER_SHEET_LAYOUTS[selectedSize as LayoutSheetSize];
   const currentStickerCount = selectedStickerCount ?? (currentDynamicLayout?.recommendedOption.count || currentLayout.defaultOption.count);
 
   const handleGenerateSheet = async () => {
-    if (!stickerImage) {
+    if (!optimizedStickerImage) {
       Alert.alert('Error', 'No sticker image found');
       return;
     }
@@ -185,7 +226,7 @@ export default function SheetSizeSelectionScreen() {
 
         setGenerationProgress('Generating layout...');
         sheetImageBase64 = await generateDynamicStickerSheet(
-          stickerImage,
+          optimizedStickerImage,
           selectedSize,
           dynamicOption
         );
@@ -204,7 +245,7 @@ export default function SheetSizeSelectionScreen() {
         setGenerationProgress('Generating sheet...');
         const startTime = Date.now();
         sheetImageBase64 = await generateRepeatedStickerSheet(
-          stickerImage,
+          optimizedStickerImage,
           selectedSize,
           currentStickerCount,
           stickerOption.grid
@@ -219,7 +260,7 @@ export default function SheetSizeSelectionScreen() {
       router.push({
         pathname: '/checkout',
         params: {
-          originalImage: originalImage || stickerImage,
+          originalImage: originalImage || optimizedStickerImage,
           finalStickers: sheetImageBase64,
           isReorder: 'false',
           isStickerSheet: 'true',
@@ -438,7 +479,7 @@ export default function SheetSizeSelectionScreen() {
               ) : (
                 <View style={[styles.previewWrapper, { width: previewSize, height: previewSize }]}>
                   <StickerSheetPreview
-                    stickerImage={stickerImage}
+                    stickerImage={optimizedStickerImage || stickerImage}
                     sheetSize={selectedSize}
                     stickerCount={currentStickerCount}
                   />
