@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { UserProvider } from "@/contexts/UserContext";
 import { StyleSheet } from "react-native";
 import { trpc, trpcReactClient } from "@/lib/trpc";
+import AppErrorBoundary from "@/components/AppErrorBoundary";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -54,7 +55,9 @@ const RootLayout = () => {
       <QueryClientProvider client={queryClient}>
         <UserProvider>
           <GestureHandlerRootView style={styles.container}>
-            <RootLayoutNav />
+            <AppErrorBoundary>
+              <RootLayoutNav />
+            </AppErrorBoundary>
           </GestureHandlerRootView>
         </UserProvider>
       </QueryClientProvider>
