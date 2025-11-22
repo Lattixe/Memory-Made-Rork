@@ -73,37 +73,6 @@ const saveImageToFile = async (base64Data: string, filename: string): Promise<st
   return filePath;
 };
 
-
-const resolveStickerPath = async (storedPath: string): Promise<string> => {
-  if (Platform.OS === 'web') return storedPath;
-  
-  // If path is invalid/empty
-  if (!storedPath) return '';
-
-  // 1. If it's just a filename (no slashes), construct full path
-  if (!storedPath.includes('/')) {
-    return `${STICKERS_DIR}${storedPath}`;
-  }
-
-  // 2. If it's a file:// path or absolute path, check if it exists
-  const fileInfo = await FileSystem.getInfoAsync(storedPath);
-  if (fileInfo.exists) {
-    return storedPath;
-  }
-
-  // 3. If it doesn't exist, it might be a path with an old container ID.
-  // Extract filename and try in current STICKERS_DIR
-  const filename = storedPath.split('/').pop();
-  if (filename) {
-    const newPath = `${STICKERS_DIR}${filename}`;
-    // Verify if this new path exists, otherwise return original (will likely fail reading, but that's expected)
-    // Actually, we can just return the new path and let readAsStringAsync fail if it's not there either
-    return newPath;
-  }
-
-  return storedPath;
-};
-
 const readImageFromFile = async (filePath: string): Promise<string> => {
   try {
     if (Platform.OS === 'web') {
@@ -113,18 +82,12 @@ const readImageFromFile = async (filePath: string): Promise<string> => {
       }
       return `data:image/png;base64,${base64}`;
     }
-
-    const resolvedPath = await resolveStickerPath(filePath);
-    if (!resolvedPath) {
-       throw new Error(`Invalid path: ${filePath}`);
-    }
-
-    const base64 = await FileSystem.readAsStringAsync(resolvedPath, {
+    const base64 = await FileSystem.readAsStringAsync(filePath, {
       encoding: FileSystem.EncodingType.Base64,
     });
     return `data:image/png;base64,${base64}`;
   } catch (error) {
-    console.error('Error reading image from file:', filePath, error);
+    console.error('Error reading image from file:', error);
     throw error;
   }
 };
@@ -135,19 +98,14 @@ const deleteImageFile = async (filePath: string): Promise<void> => {
       await deleteImageFromIndexedDB(filePath);
       return;
     }
-    
-    const resolvedPath = await resolveStickerPath(filePath);
-    if (!resolvedPath) return;
-
-    const fileInfo = await FileSystem.getInfoAsync(resolvedPath);
+    const fileInfo = await FileSystem.getInfoAsync(filePath);
     if (fileInfo.exists) {
-      await FileSystem.deleteAsync(resolvedPath);
+      await FileSystem.deleteAsync(filePath);
     }
   } catch (error) {
     console.error('Error deleting image file:', error);
   }
 };
-
 
 const extractBase64FromDataUri = (dataUri: string): string => {
   if (dataUri.startsWith('data:')) {
