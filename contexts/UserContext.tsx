@@ -50,16 +50,7 @@ export interface UserContextType {
 
 const USER_STORAGE_KEY = '@user_data';
 const STICKERS_STORAGE_KEY = '@saved_stickers';
-const getStickersDir = () => {
-  if (Platform.OS === 'web') return '';
-  try {
-    const docDir = (FileSystem as any).documentDirectory;
-    return docDir ? `${docDir}stickers/` : '';
-  } catch {
-    return '';
-  }
-};
-const STICKERS_DIR = getStickersDir();
+const STICKERS_DIR = FileSystem.documentDirectory ? `${FileSystem.documentDirectory}stickers/` : '';
 
 const ensureStickersDirectory = async () => {
   if (Platform.OS === 'web') return;
@@ -77,35 +68,26 @@ const saveImageToFile = async (base64Data: string, filename: string): Promise<st
   await ensureStickersDirectory();
   const filePath = `${STICKERS_DIR}${filename}`;
   await FileSystem.writeAsStringAsync(filePath, base64Data, {
-    encoding: 'base64' as any,
+    encoding: FileSystem.EncodingType.Base64,
   });
   return filePath;
 };
 
 const readImageFromFile = async (filePath: string): Promise<string> => {
   try {
-    console.log('[UserContext] Reading image from file:', filePath);
     if (Platform.OS === 'web') {
       const base64 = await getImageFromIndexedDB(filePath);
       if (!base64) {
-        console.error('[UserContext] Image not found in IndexedDB:', filePath);
         throw new Error(`Image not found: ${filePath}`);
       }
-      console.log('[UserContext] Successfully read image from IndexedDB, size:', base64.length);
       return `data:image/png;base64,${base64}`;
     }
-    const fileInfo = await FileSystem.getInfoAsync(filePath);
-    if (!fileInfo.exists) {
-      console.error('[UserContext] File does not exist:', filePath);
-      throw new Error(`File not found: ${filePath}`);
-    }
     const base64 = await FileSystem.readAsStringAsync(filePath, {
-      encoding: 'base64' as any,
+      encoding: FileSystem.EncodingType.Base64,
     });
-    console.log('[UserContext] Successfully read image from file, size:', base64.length);
     return `data:image/png;base64,${base64}`;
   } catch (error) {
-    console.error('[UserContext] Error reading image from file:', filePath, error);
+    console.error('Error reading image from file:', error);
     throw error;
   }
 };
@@ -183,21 +165,13 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
       if (stickersData) {
         const stickersResult = safeJsonParse<StickerMetadata[]>(stickersData);
         if (stickersResult.success && Array.isArray(stickersResult.data)) {
-          console.log('[UserContext] Loading', stickersResult.data.length, 'stickers from storage');
           const loadedStickers = await Promise.all(
             stickersResult.data.map(async (metadata) => {
               try {
-                console.log('[UserContext] Loading sticker:', metadata.id);
                 const [originalImage, stickerImage] = await Promise.all([
                   readImageFromFile(metadata.originalImagePath),
                   readImageFromFile(metadata.stickerImagePath),
                 ]);
-                
-                if (!originalImage || !stickerImage) {
-                  console.error('[UserContext] Empty image URI for sticker:', metadata.id);
-                  return null;
-                }
-                
                 const sticker: SavedSticker = {
                   id: metadata.id,
                   originalImage,
@@ -207,25 +181,19 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
                   imageWidth: metadata.imageWidth,
                   imageHeight: metadata.imageHeight,
                 };
-                console.log('[UserContext] Successfully loaded sticker:', metadata.id);
                 return sticker;
               } catch (error) {
-                console.error(`[UserContext] Error loading sticker ${metadata.id}:`, error);
+                console.error(`Error loading sticker ${metadata.id}:`, error);
                 return null;
               }
             })
           );
-          const validStickers = loadedStickers.filter((s): s is SavedSticker => s !== null);
-          console.log('[UserContext] Loaded', validStickers.length, 'valid stickers');
-          setSavedStickers(validStickers);
+          setSavedStickers(loadedStickers.filter((s): s is SavedSticker => s !== null));
         } else {
-          console.warn('[UserContext] Invalid stickers data format, clearing storage:', stickersResult.error);
+          console.warn('Invalid stickers data format, clearing storage:', stickersResult.error);
           await AsyncStorage.removeItem(STICKERS_STORAGE_KEY);
           setSavedStickers([]);
         }
-      } else {
-        console.log('[UserContext] No stickers data found in storage');
-        setSavedStickers([]);
       }
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -354,23 +322,13 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
   }, []);
 
   const saveSticker = useCallback(async (originalImage: string, stickerImage: string, title?: string) => {
-    if (!user) {
-      console.warn('[UserContext] Cannot save sticker: user not logged in');
-      return;
-    }
-    
-    if (!originalImage || !stickerImage) {
-      console.error('[UserContext] Cannot save sticker: empty image URIs');
-      throw new Error('Invalid image data');
-    }
+    if (!user) return;
 
     try {
       const stickerId = Date.now().toString();
-      console.log('[UserContext] Saving sticker:', stickerId);
 
       const processedStickerDataUri = stickerImage;
       const size = await getImageSizeFromDataUri(processedStickerDataUri);
-      console.log('[UserContext] Sticker size:', size.width, 'x', size.height);
       
       const newSticker: SavedSticker = {
         id: stickerId,
@@ -384,7 +342,6 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
 
       const updatedStickers = [newSticker, ...savedStickers];
       setSavedStickers(updatedStickers);
-      console.log('[UserContext] Updated stickers list, total:', updatedStickers.length);
       
       if (storageTimeoutRef.current) {
         clearTimeout(storageTimeoutRef.current);
@@ -392,15 +349,8 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
       
       storageTimeoutRef.current = setTimeout(async () => {
         try {
-          console.log('[UserContext] Persisting sticker to storage...');
           const originalBase64 = extractBase64FromDataUri(originalImage);
           const stickerBase64 = extractBase64FromDataUri(processedStickerDataUri);
-          
-          if (!originalBase64 || !stickerBase64) {
-            throw new Error('Failed to extract base64 data from images');
-          }
-          
-          console.log('[UserContext] Base64 data extracted, original size:', originalBase64.length, 'sticker size:', stickerBase64.length);
           
           const [originalImagePath, stickerImagePath] = await Promise.all([
             saveImageToFile(originalBase64, `${stickerId}_original.png`),
@@ -424,15 +374,14 @@ export const [UserProvider, useUser] = createContextHook<UserContextType>(() => 
           
           metadataArray.unshift(metadata);
           await AsyncStorage.setItem(STICKERS_STORAGE_KEY, JSON.stringify(metadataArray));
-          console.log('[UserContext] Sticker successfully persisted to storage');
         } catch (error) {
-          console.error('[UserContext] Error persisting sticker:', error);
+          console.error('Error persisting sticker:', error);
           setSavedStickers(prev => prev.filter(s => s.id !== stickerId));
           throw error;
         }
       }, 100);
     } catch (error) {
-      console.error('[UserContext] Error saving sticker:', error);
+      console.error('Error saving sticker:', error);
       throw error;
     }
   }, [user, savedStickers]);

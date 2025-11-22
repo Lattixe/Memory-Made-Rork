@@ -338,76 +338,54 @@ export default function SheetSizeSelectionScreen() {
   ): Promise<string> => {
     console.log('[Mobile Sheet] Starting generation...');
     
-    return new Promise(async (resolve, reject) => {
-      try {
-        // Optimization: If image is base64, save to temp file first to reduce memory usage and bridge traffic
-        // This fixes the 30s+ generation time for large base64 strings repeated 30+ times
-        let optimizedImageUri = stickerImageUri;
-        if (stickerImageUri.startsWith('data:')) {
-          console.log('[Mobile Sheet] Optimizing base64 image...');
-          const timestamp = Date.now();
-          const tempFileUri = `${FileSystem.cacheDirectory}sticker_temp_${timestamp}.png`;
-          const base64Data = stickerImageUri.split(',')[1];
-          
-          await FileSystem.writeAsStringAsync(tempFileUri, base64Data, {
+    return new Promise((resolve, reject) => {
+      const stickerOption = layout.options.find((opt: any) => opt.count === stickerCount);
+      if (!stickerOption) {
+        reject(new Error('Invalid sticker count'));
+        return;
+      }
+
+      setRenderingCanvas({
+        layout,
+        cols,
+        rows,
+        stickerCount,
+        stickerImageUri,
+      });
+
+      setTimeout(async () => {
+        try {
+          if (!sheetCanvasRef.current) {
+            setRenderingCanvas(null);
+            reject(new Error('Canvas ref not available'));
+            return;
+          }
+
+          console.log('[Mobile Sheet] Waiting for images to load...');
+          await new Promise(r => setTimeout(r, 500));
+
+          console.log('[Mobile Sheet] Capturing view...');
+          const uri = await captureRef(sheetCanvasRef.current, {
+            format: 'png',
+            quality: 0.95,
+            width: layout.sheetSizePixels,
+            height: layout.sheetSizePixels,
+          });
+
+          console.log('[Mobile Sheet] Reading file...');
+          const base64 = await FileSystem.readAsStringAsync(uri, {
             encoding: FileSystem.EncodingType.Base64,
           });
-          optimizedImageUri = tempFileUri;
-          console.log('[Mobile Sheet] Image saved to temp file:', tempFileUri);
+
+          setRenderingCanvas(null);
+          console.log('[Mobile Sheet] Generation complete');
+          resolve(`data:image/png;base64,${base64}`);
+        } catch (error) {
+          console.error('[Mobile Sheet] Error:', error);
+          setRenderingCanvas(null);
+          reject(error);
         }
-
-        const stickerOption = layout.options.find((opt: any) => opt.count === stickerCount);
-        if (!stickerOption) {
-          reject(new Error('Invalid sticker count'));
-          return;
-        }
-
-        setRenderingCanvas({
-          layout,
-          cols,
-          rows,
-          stickerCount,
-          stickerImageUri: optimizedImageUri,
-        });
-
-        setTimeout(async () => {
-          try {
-            if (!sheetCanvasRef.current) {
-              setRenderingCanvas(null);
-              reject(new Error('Canvas ref not available'));
-              return;
-            }
-
-            console.log('[Mobile Sheet] Waiting for images to load...');
-            // Reduced wait time since local file load is faster
-            await new Promise(r => setTimeout(r, 200));
-
-            console.log('[Mobile Sheet] Capturing view...');
-            const uri = await captureRef(sheetCanvasRef.current, {
-              format: 'png',
-              quality: 0.95,
-              width: layout.sheetSizePixels,
-              height: layout.sheetSizePixels,
-            });
-
-            console.log('[Mobile Sheet] Reading file...');
-            const base64 = await FileSystem.readAsStringAsync(uri, {
-              encoding: 'base64' as any,
-            });
-
-            setRenderingCanvas(null);
-            console.log('[Mobile Sheet] Generation complete');
-            resolve(`data:image/png;base64,${base64}`);
-          } catch (error) {
-            console.error('[Mobile Sheet] Error:', error);
-            setRenderingCanvas(null);
-            reject(error);
-          }
-        }, 300); // Increased slightly to ensure render, but optimized loading helps
-      } catch (error) {
-        console.error('[Mobile Sheet] Setup error:', error);
-        reject(error);
-      }
+      }, 100);
     });
   };
 

@@ -189,12 +189,6 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
       marginRight: isLastInRow ? 0 : itemGap,
     } as const;
     
-    const hasValidImage = item.stickerImage && item.stickerImage.trim() !== '';
-    
-    if (!hasValidImage) {
-      console.error('[StickerGallery] Invalid sticker image URI for sticker:', item.id);
-    }
-    
     return (
       <TouchableOpacity
         testID={`sticker-card-${item.id}`}
@@ -203,7 +197,7 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
         onPress={() => {
           if (selectionMode) {
             toggleSelection(item.id);
-          } else if (hasValidImage) {
+          } else {
             const idx = stickers.findIndex(s => s.id === item.id);
             setSelectedImageIndex(idx);
             setGalleryVisible(true);
@@ -212,21 +206,11 @@ export default function StickerGallery({ stickers, onDeleteSticker, onSelectStic
         onLongPress={() => handleLongPress(item.id)}
         activeOpacity={0.8}
       >
-        {hasValidImage ? (
-          <Image 
-            source={{ uri: item.stickerImage }} 
-            style={styles.stickerImage}
-            resizeMode="cover"
-            onError={(error) => {
-              console.error('[StickerGallery] Error loading sticker image:', item.id, error.nativeEvent.error);
-            }}
-          />
-        ) : (
-          <View style={styles.errorPlaceholder}>
-            <Text style={styles.errorText}>⚠️</Text>
-            <Text style={styles.errorTextSmall}>Failed to load</Text>
-          </View>
-        )}
+        <Image 
+          source={{ uri: item.stickerImage }} 
+          style={styles.stickerImage}
+          resizeMode="cover"
+        />
         {isSelected && (
           <View style={styles.selectionOverlay}>
             <View style={styles.checkmark}>
@@ -496,21 +480,5 @@ const styles = StyleSheet.create({
     color: neutralColors.text.secondary,
     textAlign: 'center',
     lineHeight: 22,
-  },
-  errorPlaceholder: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: neutralColors.gray200,
-  },
-  errorText: {
-    fontSize: 24,
-    marginBottom: 4,
-  },
-  errorTextSmall: {
-    fontSize: 10,
-    color: neutralColors.text.secondary,
-    textAlign: 'center',
   },
 });

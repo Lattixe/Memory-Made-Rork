@@ -25,7 +25,7 @@ import StickerGallery from '@/components/StickerGallery';
 import { safeJsonParse } from '@/utils/json';
 import { processStickerImage } from '@/utils/backgroundRemover';
 import { getInitialGenerationPrompt, getRegenerationPrompt } from '@/utils/promptManager';
-import { callImageEditApi, callImageGenerateApi } from '@/utils/imageEditApi';
+import { callImageEditApi } from '@/utils/imageEditApi';
 
 
 type ImageEditRequest = {
@@ -240,11 +240,30 @@ export default function UploadScreen() {
     console.log('Starting AI sticker generation from prompt with gpt-image-1-mini...');
     
     try {
-      // Use generation API directly for better results and transparent background
-      // This skips the need for a white base image
+      // Create a simple white canvas as base image
+      let base64Data: string;
+      
+      if (Platform.OS === 'web') {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1024;
+        canvas.height = 1024;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, 1024, 1024);
+        }
+        const whiteCanvasDataUrl = canvas.toDataURL('image/png');
+        base64Data = whiteCanvasDataUrl.split(',')[1];
+      } else {
+        // For mobile, create a simple base64 encoded white PNG
+        // This is a minimal 1x1 white PNG in base64
+        base64Data = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+      }
+
       const prompt = await getRegenerationPrompt(promptText);
       
-      const data = await callImageGenerateApi(prompt);
+      // Use callImageEditApi which respects the model selection from admin settings
+      const data = await callImageEditApi(base64Data, prompt);
 
       console.log('AI generation completed successfully!');
       
